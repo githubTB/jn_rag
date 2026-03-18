@@ -1,48 +1,32 @@
-"""Abstract interface for document loader implementations."""
-
 from pathlib import Path
 
-from .extractor_base import BaseExtractor
+from .base import BaseExtractor
 from .helpers import detect_file_encodings
-from core.rag.models.document import Document
+from models.document import Document
 
 
 class TextExtractor(BaseExtractor):
-    """Load text files.
-
-
-    Args:
-        file_path: Path to the file to load.
-    """
-
-    def __init__(self, file_path: str, encoding: str | None = None, autodetect_encoding: bool = False):
-        """Initialize with file path."""
+    def __init__(self, file_path: str, encoding: str | None = None, autodetect_encoding: bool = True):
         self._file_path = file_path
         self._encoding = encoding
         self._autodetect_encoding = autodetect_encoding
 
     def extract(self) -> list[Document]:
-        """Load from file path."""
-        text = ""
         try:
             text = Path(self._file_path).read_text(encoding=self._encoding)
         except UnicodeDecodeError as e:
             if self._autodetect_encoding:
-                detected_encodings = detect_file_encodings(self._file_path)
-                for encoding in detected_encodings:
+                for enc in detect_file_encodings(self._file_path):
                     try:
-                        text = Path(self._file_path).read_text(encoding=encoding.encoding)
+                        text = Path(self._file_path).read_text(encoding=enc.encoding)
                         break
                     except UnicodeDecodeError:
                         continue
                 else:
-                    raise RuntimeError(
-                        f"Decode failed: {self._file_path}, all detected encodings failed. Original error: {e}"
-                    )
+                    raise RuntimeError(f"All detected encodings failed for {self._file_path}") from e
             else:
-                raise RuntimeError(f"Decode failed: {self._file_path}, specified encoding failed. Original error: {e}")
+                raise RuntimeError(f"Decode failed for {self._file_path}") from e
         except Exception as e:
             raise RuntimeError(f"Error loading {self._file_path}") from e
 
-        metadata = {"source": self._file_path}
-        return [Document(page_content=text, metadata=metadata)]
+        return [Document(page_content=text, metadata={"source": self._file_path})]
