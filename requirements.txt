@@ -1,0 +1,27 @@
+# Encoding detection
+charset-normalizer>=3.0
+
+# PDF
+pypdfium2>=4.0
+
+# Word (.docx)
+python-docx>=1.0
+
+# Excel (.xlsx / .xls)
+openpyxl>=3.1
+xlrd>=2.0
+pandas>=2.0
+
+# HTML
+beautifulsoup4>=4.12
+
+# PowerPoint (.pptx)
+python-pptx>=0.6
+
+# Images — OCR (local, no API key required)
+pytesseract>=0.3
+Pillow>=10.0
+# System dependency (install separately):
+#   Ubuntu/Debian: apt install tesseract-ocr
+#   Chinese:       apt install tesseract-ocr-chi-sim tesseract-ocr-chi-tra
+#   macOS:         brew install tesseract tesseract-lang
