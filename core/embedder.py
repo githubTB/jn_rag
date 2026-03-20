@@ -348,4 +348,3 @@ class Embedder:
         """返回集合中的 chunk 总数。"""
         col = _get_collection()
         return col.num_entities
-        
