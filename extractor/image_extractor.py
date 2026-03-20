@@ -544,8 +544,9 @@ class ImageExtractor(BaseExtractor):
         for result in raw_results:
             logger.info("[VL] result 类型: %s", type(result).__name__)
 
-            # DEBUG 模式下打印完整结构（INFO 级，方便排查）
-            self._diagnose_result(result)
+            # 仅在 DEBUG 级别时打印完整结构（生产环境不影响性能）
+            if logger.isEnabledFor(logging.DEBUG):
+                self._diagnose_result(result)
 
             # ── 方式 1：从 result.res 按块提取 ──────────────────────
             blocks = self._extract_blocks(result)

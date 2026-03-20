@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+.idea/
 .Python
 venv/
 venv_old/
@@ -27,7 +28,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-uploads/
+uploaded_files/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
