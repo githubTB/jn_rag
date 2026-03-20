@@ -69,7 +69,9 @@ app.add_middleware(
 
 # 挂载路由
 from api.routes.ingest import router as ingest_router
+from api.routes.search import router as search_router
 app.include_router(ingest_router)
+app.include_router(search_router)
 
 
 # ---------------------------------------------------------------------------

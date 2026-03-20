@@ -61,11 +61,10 @@ def _get_model():
             "[Embedder] 加载模型: %s  device=%s  fp16=%s",
             settings.embedding_model, device, use_fp16,
         )
-        _model = FlagModel(
-            settings.embedding_model,
-            use_fp16=use_fp16,
-            devices=[device] if device != "cpu" else None,
-        )
+        init_kwargs: dict = {"use_fp16": use_fp16}
+        if device != "cpu":
+            init_kwargs["device"] = device
+        _model = FlagModel(settings.embedding_model, **init_kwargs)
         logger.info("[Embedder] 模型加载完成")
     return _model
 
@@ -123,7 +122,8 @@ def _get_collection():
     if not utility.has_collection(col_name):
         schema = CollectionSchema(
             fields=[
-                FieldSchema("id",          DataType.VARCHAR,       max_length=64,   is_primary=True),
+                FieldSchema("pk",          DataType.INT64,         is_primary=True, auto_id=True),
+                FieldSchema("chunk_id",    DataType.VARCHAR,       max_length=64),
                 FieldSchema("file_id",     DataType.VARCHAR,       max_length=64),
                 FieldSchema("chunk_index", DataType.INT64),
                 FieldSchema("source",      DataType.VARCHAR,       max_length=512),
@@ -255,7 +255,7 @@ class Embedder:
 
         rows = [
             {
-                "id":          h,
+                "chunk_id":    h,
                 "file_id":     file_id,
                 "chunk_index": chunk.metadata.get("chunk_index", i),
                 "source":      chunk.metadata.get("source", "")[:512],
@@ -308,7 +308,7 @@ class Embedder:
             param=search_params,
             limit=top_k,
             expr=filter_expr,
-            output_fields=["id", "file_id", "source", "label", "content"],
+            output_fields=["chunk_id", "file_id", "source", "label", "content"],
         )
 
         hits = []
@@ -317,7 +317,7 @@ class Embedder:
             if score < score_threshold:
                 continue
             hits.append({
-                "id":      hit.id,
+                "id":      hit.entity.get("chunk_id"),
                 "file_id": hit.entity.get("file_id"),
                 "source":  hit.entity.get("source"),
                 "label":   hit.entity.get("label"),
