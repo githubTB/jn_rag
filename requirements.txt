@@ -18,10 +18,10 @@ beautifulsoup4>=4.12
 # PowerPoint (.pptx)
 python-pptx>=0.6
 
-# Images — OCR (local, no API key required)
-pytesseract>=0.3
-Pillow>=10.0
-# System dependency (install separately):
-#   Ubuntu/Debian: apt install tesseract-ocr
-#   Chinese:       apt install tesseract-ocr-chi-sim tesseract-ocr-chi-tra
-#   macOS:         brew install tesseract tesseract-lang
+# Images — PaddleOCR (本地，无需 API Key)
+# CPU 版
+paddlepaddle>=3.0
+paddleocr>=3.4
+Pillow>=12.1
+numpy>=1.25
+opencv-python>=4.8

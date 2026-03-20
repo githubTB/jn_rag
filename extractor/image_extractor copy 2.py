@@ -450,6 +450,7 @@ class ImageExtractor(BaseExtractor):
     # ------------------------------------------------------------------
 
     def _build_init_kwargs(self) -> dict:
+        logger.info("[VL] backend=%s url=%s", self._vl_rec_backend, self._vl_rec_server_url)
         """构建 PaddleOCRVL 初始化参数。"""
         kwargs: dict = {
             "vl_rec_max_concurrency": self._vl_rec_max_concurrency,
@@ -487,7 +488,11 @@ class ImageExtractor(BaseExtractor):
 
         logger.info("[VL] 调用 pipeline.predict，文件: %s", infer_path)
         try:
-            raw_results = list(pipeline.predict(infer_path))  # type: ignore[union-attr]
+            raw_results = list(pipeline.predict(infer_path)) 
+            print(f"RAW RESULTS COUNT: {len(raw_results)}")
+            print(f"RAW RESULTS TYPES: {[type(r).__name__ for r in raw_results]}")
+            for i, r in enumerate(raw_results):
+                print(f"RAW[{i}]: {r}") # type: ignore[union-attr]
         except Exception as exc:
             logger.error("[VL] pipeline.predict 失败: %s", exc, exc_info=True)
             raise
@@ -563,86 +568,46 @@ class ImageExtractor(BaseExtractor):
 
     def _extract_blocks(self, result) -> list[tuple[str, dict]]:
         """
-        从 PaddleOCRVLResult 中提取文本块。
-
-        result 是一个 dict-like 对象，关键字段：
-          - parsing_res_list: 主要内容列表，每项有 label / bbox / content
-          - layout_det_res:   版面检测结果（boxes）
-          - table_res_list:   表格识别结果
+        尝试从 result 中提取逐块内容。
+        PaddleOCRVL 结果包含 blocks 属性，每块有 label 和识别文本。
         """
         blocks_out: list[tuple[str, dict]] = []
 
         try:
-            # result 本身就是 dict（PaddleOCRVLResult 实现了 __getitem__）
-            res_dict = dict(result) if hasattr(result, "keys") else {}
-            if not res_dict and hasattr(result, "res"):
-                res_dict = result.res or {}
+            # result.res 是一个 dict，包含 'blocks' 等字段
+            res_dict = result.res if hasattr(result, "res") else {}
+            if isinstance(res_dict, dict):
+                blocks = res_dict.get("blocks", [])
+            else:
+                return []
 
-            # ── 优先读 parsing_res_list（主要识别结果）─────────────
-            parsing_res_list = res_dict.get("parsing_res_list", [])
-            if parsing_res_list:
-                logger.info("[VL] 解析 parsing_res_list，共 %d 块", len(parsing_res_list))
-                for blk in parsing_res_list:
-                    # blk 可能是 dict 也可能是有属性的对象
-                    if isinstance(blk, dict):
-                        label = blk.get("label", "text")
-                        text = (
-                            blk.get("content")
-                            or blk.get("markdown")
-                            or blk.get("text")
-                            or ""
-                        ).strip()
-                        bbox = blk.get("bbox", [])
-                    else:
-                        label = getattr(blk, "label", "text")
-                        text = (
-                            getattr(blk, "content", "")
-                            or getattr(blk, "markdown", "")
-                            or getattr(blk, "text", "")
-                            or ""
-                        ).strip()
-                        bbox = getattr(blk, "bbox", [])
+            if not blocks:
+                return []
 
-                    if not text:
-                        continue
+            logger.info("[VL] 解析 %d 个布局块", len(blocks))
 
-                    if self._output_format == "text":
-                        text = _strip_markdown(text)
+            for blk in blocks:
+                label = blk.get("label", "text")
+                # 优先取 markdown 格式内容（表格/公式有特殊格式）
+                text = (
+                    blk.get("markdown")
+                    or blk.get("text")
+                    or blk.get("content")
+                    or ""
+                ).strip()
 
-                    meta = {"label": label}
-                    if bbox:
-                        meta["bbox"] = bbox
-
-                    logger.debug("[VL] 块 label=%s 内容前80字: %r", label, text[:80])
-                    blocks_out.append((text, meta))
-
-                if blocks_out:
-                    return blocks_out
-
-            # ── 兜底读 layout_det_res 的 boxes（只有坐标没有文本，跳过）
-            # ── 再兜底读旧版 blocks 字段 ─────────────────────────────
-            for key in ("blocks", "ocr_res", "rec_res"):
-                items = res_dict.get(key, [])
-                if not items:
+                if not text:
                     continue
-                logger.info("[VL] 从 %r 字段读取 %d 块", key, len(items))
-                for blk in items:
-                    if not isinstance(blk, dict):
-                        continue
-                    label = blk.get("label", "text")
-                    text = (
-                        blk.get("content")
-                        or blk.get("markdown")
-                        or blk.get("text")
-                        or ""
-                    ).strip()
-                    if not text:
-                        continue
-                    if self._output_format == "text":
-                        text = _strip_markdown(text)
-                    blocks_out.append((text, {"label": label}))
-                if blocks_out:
-                    return blocks_out
+
+                if self._output_format == "text":
+                    text = _strip_markdown(text)
+
+                meta = {"label": label}
+                if "score" in blk:
+                    meta["score"] = blk["score"]
+
+                logger.debug("[VL] 块 label=%s 内容: %r", label, text[:80])
+                blocks_out.append((text, meta))
 
         except Exception as exc:
             logger.warning("[VL] 块解析失败，将用整页兜底: %s", exc)
@@ -734,4 +699,3 @@ def _strip_markdown(text: str) -> str:
     # 压缩多余空行
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
-    
