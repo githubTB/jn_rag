@@ -120,6 +120,7 @@ class ImageExtractor(BaseExtractor):
         self,
         file_path: str,
         *,
+        doc_type: str = "unknown", 
         max_file_mb: float = 50.0,
         use_layout_detection: bool | None = None,
         use_doc_orientation_classify: bool = False,
@@ -134,6 +135,7 @@ class ImageExtractor(BaseExtractor):
         **_ignored,
     ):
         self._file_path = file_path
+        self._doc_type = doc_type
         self._max_file_mb = max_file_mb
         self._use_layout_detection = use_layout_detection
         self._use_doc_orientation_classify = use_doc_orientation_classify
@@ -555,4 +557,3 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"^\|?[-:| ]+\|?\s*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
-    
