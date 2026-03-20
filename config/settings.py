@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # ── 文件存储 ──────────────────────────────────────────────────────
     upload_dir: str = Field("uploaded_files", description="上传文件目录")
-    db_path: str = Field("rag_meta.db", description="SQLite 元数据库路径")
+    db_path: str = Field("data/rag_meta.db", description="SQLite 元数据库路径")
 
     # ── Milvus 向量库 ─────────────────────────────────────────────────
     milvus_host: str = Field("localhost", description="Milvus 地址")
