@@ -23,9 +23,11 @@ Linux GPU（vLLM 服务，推荐生产）：
 
 from __future__ import annotations
 
+import gc
 import logging
 import os
 import re
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -127,6 +129,7 @@ class ImageExtractor(BaseExtractor):
         vl_rec_max_concurrency: int = 1,
         device: str | None = None,
         output_format: str = "markdown",
+        release_pipeline_after_extract: bool | None = None,
         max_pixels: int | None = None,  # 废弃参数，静默忽略
         **_ignored,
     ):
@@ -135,11 +138,13 @@ class ImageExtractor(BaseExtractor):
         self._use_layout_detection = use_layout_detection
         self._use_doc_orientation_classify = use_doc_orientation_classify
         self._use_doc_unwarping = use_doc_unwarping
+        self._doc_type = doc_type
         self._vl_rec_backend    = vl_rec_backend    or _env("VL_BACKEND")
         self._vl_rec_server_url = vl_rec_server_url or _env("VL_SERVER_URL")
         self._vl_rec_max_concurrency = vl_rec_max_concurrency
         self._device = device or _env("VL_DEVICE")
         self._output_format = output_format
+        self._release_pipeline_after_extract = release_pipeline_after_extract
 
         logger.debug(
             "[VL] 配置: backend=%s url=%s device=%s",
@@ -154,6 +159,25 @@ class ImageExtractor(BaseExtractor):
         path = Path(self._file_path)
         is_url = self._file_path.startswith(("http://", "https://"))
         ext = path.suffix.lower()
+
+        # ── doc_type 路由：PP-OCRv4 / GOT-OCR2 / PaddleOCR-VL ────────
+        # license/invoice/table/document → PP-OCRv4（轻量，CPU）
+        # nameplate → GOT-OCR2（复杂场景，GPU）
+        # unknown → PaddleOCR-VL 兜底
+        if not is_url and self._doc_type != "unknown":
+            try:
+                from extractor.ocr_router import route_ocr
+                logger.info("[VL] doc_type=%s，走 OCR 路由", self._doc_type)
+                return route_ocr(
+                    self._file_path,
+                    doc_type=self._doc_type,
+                    vl_rec_backend=self._vl_rec_backend,
+                    vl_rec_server_url=self._vl_rec_server_url,
+                    device=self._device,
+                )
+            except Exception as exc:
+                logger.warning("[VL] OCR 路由失败，降级到 PaddleOCR-VL: %s", exc)
+                # 降级继续走下面的 PaddleOCR-VL 流程
 
         infer_path: str = self._file_path
         tmp_path: Path | None = None
@@ -174,6 +198,7 @@ class ImageExtractor(BaseExtractor):
                     tmp_path.unlink()
                 except Exception:
                     pass
+            self._maybe_release_pipeline()
 
         logger.info("[VL] 推理完成，共 %d 块", len(results))
 
@@ -223,7 +248,8 @@ class ImageExtractor(BaseExtractor):
         if file_mb > self._max_file_mb:
             raise ValueError(f"文件过大 ({file_mb:.1f} MB > {self._max_file_mb} MB): {path}")
 
-        header = path.read_bytes()[:12]
+        with path.open("rb") as f:
+            header = f.read(12)
         detected_mime: str | None = None
         for magic, mime in self._MAGIC:
             if header.startswith(magic):
@@ -236,18 +262,20 @@ class ImageExtractor(BaseExtractor):
         if detected_mime != _MIME_MAP[ext]:
             logger.warning("[VL] 扩展名与实际格式不符 (%s vs %s)，尝试继续", ext, detected_mime)
 
+        # 用 Pillow verify() 轻量校验，只读文件头，不解码整张图
+        # 比 cv2.imread 省 10-50x 内存（尤其对 4K+ 原图）
         try:
-            import cv2
-            import numpy as np
-            raw = np.frombuffer(path.read_bytes(), dtype=np.uint8)
-            probe = cv2.imdecode(raw, cv2.IMREAD_GRAYSCALE)
-            if probe is None:
-                raise ValueError(f"图片文件损坏: {path.name}")
-            h, w = probe.shape[:2]
+            from PIL import Image
+            with Image.open(path) as probe:
+                probe.verify()   # 只读头部，不解码像素
+            # verify() 后需重新 open 才能读尺寸
+            with Image.open(path) as probe:
+                w, h = probe.size
             logger.info("[VL] 图片尺寸: %dx%d px", w, h)
-            del probe, raw
         except ImportError:
-            logger.debug("[VL] opencv 未安装，跳过解码校验")
+            logger.debug("[VL] Pillow 未安装，跳过解码校验")
+        except Exception as exc:
+            raise ValueError(f"图片文件损坏: {path.name}") from exc
 
     # ------------------------------------------------------------------
     #  预处理
@@ -255,7 +283,7 @@ class ImageExtractor(BaseExtractor):
 
     def _preprocess_image(self, path: Path) -> Path | None:
         """EXIF 修正 + 超大图降采样，返回临时文件路径或 None（无需处理时）。"""
-        import tempfile, uuid
+        import uuid
 
         try:
             from PIL import Image, ImageOps
@@ -263,40 +291,53 @@ class ImageExtractor(BaseExtractor):
             logger.debug("[VL] Pillow 未安装，跳过预处理")
             return None
 
-        img = Image.open(path)
+        output_img = None
         changed = False
-
-        # EXIF 方向修正
         try:
-            oriented = ImageOps.exif_transpose(img)
-            if oriented is not img:
-                img = oriented
-                changed = True
-                logger.info("[VL] EXIF 方向已修正: %s", path.name)
-        except Exception as e:
-            logger.debug("[VL] EXIF 修正跳过: %s", e)
+            with Image.open(path) as opened:
+                img = opened
 
-        # 超大图降采样（>3500px 长边）
-        w, h = img.size
-        if max(w, h) > 3500:
-            scale = 3500 / max(w, h)
-            nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
-            img = img.resize((nw, nh), Image.LANCZOS)
-            changed = True
-            logger.info("[VL] 降采样: %dx%d → %dx%d", w, h, nw, nh)
+                # EXIF 方向修正
+                try:
+                    oriented = ImageOps.exif_transpose(img)
+                    if oriented is not img:
+                        img = oriented
+                        changed = True
+                        logger.info("[VL] EXIF 方向已修正: %s", path.name)
+                except Exception as e:
+                    logger.debug("[VL] EXIF 修正跳过: %s", e)
 
-        if not changed:
-            img.close()
-            return None
+                # 超大图降采样（>3500px 长边）
+                w, h = img.size
+                if max(w, h) > 3500:
+                    scale = 3500 / max(w, h)
+                    nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
+                    resized = img.resize((nw, nh), Image.LANCZOS)
+                    if resized is not img and img is not opened:
+                        img.close()
+                    img = resized
+                    changed = True
+                    logger.info("[VL] 降采样: %dx%d → %dx%d", w, h, nw, nh)
 
-        suffix = path.suffix.lower() or ".jpg"
-        tmp = Path(tempfile.gettempdir()) / f"_vlocr_{uuid.uuid4().hex}{suffix}"
-        kwargs: dict = {}
-        if suffix in (".jpg", ".jpeg"):
-            kwargs = {"quality": 92, "optimize": True}
-        img.save(tmp, **kwargs)
-        img.close()
-        return tmp
+                if not changed:
+                    if img is not opened:
+                        img.close()
+                    return None
+
+                output_img = img.copy()
+                if img is not opened:
+                    img.close()
+
+            suffix = path.suffix.lower() or ".jpg"
+            tmp = Path(tempfile.gettempdir()) / f"_vlocr_{uuid.uuid4().hex}{suffix}"
+            kwargs: dict = {}
+            if suffix in (".jpg", ".jpeg"):
+                kwargs = {"quality": 92, "optimize": True}
+            output_img.save(tmp, **kwargs)
+            return tmp
+        finally:
+            if output_img is not None:
+                output_img.close()
 
     # ------------------------------------------------------------------
     #  Pipeline
@@ -318,8 +359,8 @@ class ImageExtractor(BaseExtractor):
         if self._use_layout_detection is not None:
             kwargs["use_layout_detection"] = self._use_layout_detection
 
-        logger.info("[VL] pipeline 参数: backend=%s url=%s device=%s",
-                    self._vl_rec_backend, self._vl_rec_server_url, self._device)
+        logger.info("[VL] pipeline 参数: backend=%s url=%s device=%s doc_type=%s",
+                    self._vl_rec_backend, self._vl_rec_server_url, self._device, self._doc_type)
         return kwargs
 
     def _run_pipeline(self, infer_path: str) -> list[tuple[str, dict]]:
@@ -328,14 +369,38 @@ class ImageExtractor(BaseExtractor):
             raise RuntimeError("PaddleOCRVL 无 predict 方法，请升级: pip install -U paddleocr")
 
         logger.info("[VL] pipeline.predict: %s", infer_path)
+        parsed_results: list[tuple[str, dict]] = []
+        result_count = 0
         try:
-            raw_results = list(pipeline.predict(infer_path))
+            for raw_result in pipeline.predict(infer_path):
+                result_count += 1
+                parsed_results.extend(self._parse_results([raw_result]))
+                del raw_result
         except Exception as exc:
             logger.error("[VL] predict 失败: %s", exc, exc_info=True)
             raise
+        finally:
+            gc.collect()
 
-        logger.info("[VL] predict 返回 %d 个结果", len(raw_results))
-        return self._parse_results(raw_results)
+        logger.info("[VL] predict 返回 %d 个结果", result_count)
+        return parsed_results
+
+    def _maybe_release_pipeline(self) -> None:
+        if self._release_pipeline_after_extract is None:
+            should_release = (
+                (self._device or "").lower() == "cpu"
+                and not self._vl_rec_backend
+                and not self._vl_rec_server_url
+            )
+        else:
+            should_release = self._release_pipeline_after_extract
+
+        if not should_release:
+            return
+
+        logger.info("[VL] 当前为本地 CPU 模式，提取后主动释放 pipeline")
+        reset_pipeline()
+        gc.collect()
 
     # ------------------------------------------------------------------
     #  结果解析
@@ -414,7 +479,7 @@ class ImageExtractor(BaseExtractor):
 
     def _result_to_text(self, result) -> str:
         """整页兜底：依次尝试 res 字段 → save_to_json → save_to_markdown。"""
-        import json, tempfile, os
+        import json
 
         # 方式 A：result.res 直接含文本
         res_dict = result.res if hasattr(result, "res") else {}
@@ -429,7 +494,8 @@ class ImageExtractor(BaseExtractor):
         if hasattr(result, "save_to_json"):
             tmp = None
             try:
-                tmp = tempfile.mktemp(suffix=".json")
+                with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+                    tmp = f.name
                 result.save_to_json(tmp)
                 with open(tmp, encoding="utf-8") as f:
                     data = json.load(f)
@@ -458,7 +524,8 @@ class ImageExtractor(BaseExtractor):
         if hasattr(result, "save_to_markdown"):
             tmp = None
             try:
-                tmp = tempfile.mktemp(suffix=".md")
+                with tempfile.NamedTemporaryFile(suffix=".md", delete=False) as f:
+                    tmp = f.name
                 result.save_to_markdown(tmp)
                 with open(tmp, encoding="utf-8") as f:
                     return f.read()
@@ -488,3 +555,4 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"^\|?[-:| ]+\|?\s*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+    

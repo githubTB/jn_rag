@@ -106,6 +106,8 @@ def _get_collection():
                 FieldSchema("pk",          DataType.INT64,        is_primary=True, auto_id=True),
                 FieldSchema("chunk_id",    DataType.VARCHAR,      max_length=64),
                 FieldSchema("file_id",     DataType.VARCHAR,      max_length=64),
+                FieldSchema("company_id",  DataType.VARCHAR,      max_length=64),
+                FieldSchema("doc_type",    DataType.VARCHAR,      max_length=32),
                 FieldSchema("chunk_index", DataType.INT64),
                 FieldSchema("source",      DataType.VARCHAR,      max_length=512),
                 FieldSchema("label",       DataType.VARCHAR,      max_length=64),
@@ -193,6 +195,8 @@ class Embedder:
         vectors: list[list[float]],
         file_id: str,
         chunk_hashes: list[str],
+        company_id: str | None = None,
+        doc_type: str = "unknown",
     ) -> int:
         """
         将 chunk + 向量写入 Milvus，返回实际写入条数。
@@ -203,6 +207,8 @@ class Embedder:
         vectors      : Embedder.embed() 输出，顺序与 chunks 一致
         file_id      : 文件 SHA256（Dedup.register_file 返回值）
         chunk_hashes : chunk 内容 SHA256（Dedup.filter_new_chunks 返回值）
+        company_id   : 所属企业 ID（用于按企业过滤搜索）
+        doc_type     : 文件类型（license/invoice/table/nameplate/document/unknown）
         """
         if not chunks:
             logger.info("[Milvus] 无新 chunk，跳过写入")
@@ -216,6 +222,8 @@ class Embedder:
             {
                 "chunk_id":    h,
                 "file_id":     file_id,
+                "company_id":  company_id or "",
+                "doc_type":    doc_type[:32],
                 "chunk_index": chunk.metadata.get("chunk_index", i),
                 "source":      chunk.metadata.get("source", "")[:512],
                 "label":       chunk.metadata.get("label", "unknown")[:64],
@@ -266,7 +274,7 @@ class Embedder:
             param={"metric_type": "COSINE", "params": {"ef": 64}},
             limit=top_k,
             expr=filter_expr,
-            output_fields=["chunk_id", "file_id", "source", "label", "content"],
+            output_fields=["chunk_id", "file_id", "company_id", "doc_type", "source", "label", "content"],
         )
 
         hits = []
@@ -274,12 +282,14 @@ class Embedder:
             if hit.score < score_threshold:
                 continue
             hits.append({
-                "id":      hit.entity.get("chunk_id"),
-                "file_id": hit.entity.get("file_id"),
-                "source":  hit.entity.get("source"),
-                "label":   hit.entity.get("label"),
-                "content": hit.entity.get("content"),
-                "score":   round(hit.score, 4),
+                "id":         hit.entity.get("chunk_id"),
+                "file_id":    hit.entity.get("file_id"),
+                "company_id": hit.entity.get("company_id"),
+                "doc_type":   hit.entity.get("doc_type"),
+                "source":     hit.entity.get("source"),
+                "label":      hit.entity.get("label"),
+                "content":    hit.entity.get("content"),
+                "score":      round(hit.score, 4),
             })
 
         logger.info("[Milvus] 搜索 %r → %d 条结果", query[:30], len(hits))

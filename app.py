@@ -1,12 +1,20 @@
 """
-app.py — RAG 知识库 API 入口。
+app.py — RAG 知识库 API + 前端托管。
 
 接口列表：
-  GET    /api/health              服务健康状态
-  POST   /api/ingest              上传文件入库（支持 sync 参数）
-  GET    /api/ingest/status/{id}  查询入库状态
-  GET    /api/files               已入库文件列表
-  DELETE /api/files/{file_id}     删除文件
+  GET    /                       前端页面
+  GET    /api/health             服务健康状态（含统计）
+  POST   /api/ingest             上传单文件入库
+  POST   /api/ingest/scan/{id}   扫描企业目录批量入库
+  GET    /api/ingest/status/{id} 查询入库状态
+  GET    /api/files              已入库文件列表
+  DELETE /api/files/{file_id}    删除文件
+  POST   /api/companies          创建企业
+  GET    /api/companies          企业列表
+  GET    /api/companies/{id}     企业详情
+  DELETE /api/companies/{id}     删除企业
+  GET    /api/search             纯向量检索
+  GET    /api/query              向量检索 + LLM 问答
 
 启动：
     uvicorn app:app --host 0.0.0.0 --port 8000 --reload
@@ -18,9 +26,12 @@ warnings.filterwarnings("ignore", message="chardet", category=Warning)
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from config.settings import settings
 
@@ -31,34 +42,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR.mkdir(exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# 启动 / 关闭生命周期
-# ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时预热（可选，提前加载模型避免第一次请求慢）
-    logger.info("服务启动，配置:")
+    logger.info("服务启动:")
     logger.info("  upload_dir : %s", settings.upload_dir)
     logger.info("  db_path    : %s", settings.db_path)
-    logger.info("  milvus     : %s:%s", settings.milvus_host, settings.milvus_port)
+    logger.info("  milvus     : %s:%s  collection=%s",
+                settings.milvus_host, settings.milvus_port, settings.milvus_collection)
     logger.info("  embedding  : %s @ %s", settings.embedding_model, settings.embedding_device)
     logger.info("  vl_backend : %s", settings.vl_backend or "本地CPU")
-    logger.info("  vl_url     : %s", settings.vl_server_url or "无")
+    logger.info("  got_ocr    : %s", settings.got_ocr_model or "未部署")
     yield
     logger.info("服务关闭")
 
 
-# ---------------------------------------------------------------------------
-# FastAPI 应用
-# ---------------------------------------------------------------------------
-
-app = FastAPI(
-    title="RAG 知识库 API",
-    version="0.1.0",
-    lifespan=lifespan,
-)
+app = FastAPI(title="RAG 知识库", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -73,16 +75,71 @@ from api.routes.search import router as search_router
 app.include_router(ingest_router)
 app.include_router(search_router)
 
+# 静态文件（JS/CSS/图片等）
+if (STATIC_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets")
+
 
 # ---------------------------------------------------------------------------
-# 健康检查
+# 健康检查（前端需要的完整信息）
 # ---------------------------------------------------------------------------
 
 @app.get("/api/health")
 async def health():
     from core.dedup import Dedup
+    from config.settings import settings
+
     stats = Dedup.stats()
+
+    milvus_ok = False
+    vector_count = 0
+    try:
+        from core.embedder import Embedder
+        vector_count = Embedder.count()
+        milvus_ok = True
+    except Exception:
+        pass
+
     return {
-        "status": "ok",
-        "stats":  stats,
+        "status":        "ok" if milvus_ok else "degraded",
+        "milvus":        milvus_ok,
+        "milvus_host":   settings.milvus_host,
+        "milvus_port":   settings.milvus_port,
+        "collection":    settings.milvus_collection,
+        "embed_model":   settings.embedding_model,
+        "embed_device":  settings.embedding_device,
+        "llm_model":     settings.llm_model,
+        "llm_api_base":  settings.llm_api_base,
+        "vl_backend":    settings.vl_backend or "local_cpu",
+        "got_ocr":       settings.got_ocr_model or "",
+        "got_ocr_ready": settings.got_ocr_available,
+        "stats":         stats,
+        "vector_count":  vector_count,
     }
+
+
+# ---------------------------------------------------------------------------
+# 前端页面
+# ---------------------------------------------------------------------------
+
+@app.get("/")
+async def index():
+    html = STATIC_DIR / "index.html"
+    if html.exists():
+        return FileResponse(str(html))
+    return {"message": "请将 index.html 放到 static/ 目录"}
+
+@app.delete("/api/collection")
+async def drop_collection():
+    from scripts.cleanup import _drop_milvus_collection
+    from config.settings import settings
+    _drop_milvus_collection(settings.milvus_collection)
+    # 清 SQLite
+    from core.dedup import _conn, _ensure_init
+    _ensure_init()
+    with _conn() as conn:
+        conn.execute("DELETE FROM chunks")
+        conn.execute("DELETE FROM files")
+        conn.execute("DELETE FROM companies")
+    return {"message": "知识库已清空"}
+    

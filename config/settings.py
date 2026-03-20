@@ -47,6 +47,9 @@ class Settings(BaseSettings):
         extra="ignore",         # 忽略 .env 里多余的 key，不报错
     )
 
+    # ── GOT-OCR2 ─────────────────────────────────────────────────────
+    got_ocr_model: str = Field("", description="GOT-OCR2 本地路径，空=未部署自动降级")
+
     # ── 文件存储 ──────────────────────────────────────────────────────
     upload_dir: str = Field("uploaded_files", description="上传文件目录")
     db_path: str = Field("data/rag_meta.db", description="SQLite 元数据库路径")
@@ -75,6 +78,12 @@ class Settings(BaseSettings):
     vl_device: str | None = Field(None, description="OCR 推理设备，None=自动")
     vl_max_file_mb: float = Field(50.0, description="OCR 图片大小上限 MB")
 
+    @property
+    def got_ocr_available(self) -> bool:
+        if not self.got_ocr_model:
+            return False
+        from pathlib import Path
+        return Path(self.got_ocr_model).exists()
 
 # 全局单例，项目任意位置 from config.settings import settings 即可使用
 settings = Settings()
