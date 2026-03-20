@@ -1,49 +1,86 @@
 """
-app.py — RAG 知识库 API
+app.py — RAG 知识库 API 入口。
 
-接口：
-  GET  /api/health          服务健康状态
-  POST /api/ingest          上传文件 → 解析 → 向量化 → 入库（自动去重）
-  GET  /api/search          纯向量检索（不走 LLM）
-  GET  /api/query           向量检索 + LLM（qwen3.5） 生成带来源标注的答案
-  GET  /api/files           已入库文件列表
-  DELETE /api/files/{name}  删除文件
+接口列表：
+  GET    /api/health              服务健康状态
+  POST   /api/ingest              上传文件入库（支持 sync 参数）
+  GET    /api/ingest/status/{id}  查询入库状态
+  GET    /api/files               已入库文件列表
+  DELETE /api/files/{file_id}     删除文件
+
+启动：
+    uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 """
 
 import warnings
-
-# 过滤 requests/urllib3 版本不匹配的无害警告
 warnings.filterwarnings("ignore", message="urllib3", category=Warning)
 warnings.filterwarnings("ignore", message="chardet", category=Warning)
 
-from config.settings import settings
-from extract_processor import ExtractProcessor
-from extractor.doc_chunker import DocChunker
+import logging
+from contextlib import asynccontextmanager
 
-def process_image(image_path: str):
-    docs = ExtractProcessor.extract(
-        image_path,
-        vl_rec_backend=settings.vl_backend,
-        vl_rec_server_url=settings.vl_server_url,
-        device=settings.vl_device,
-        max_file_mb=settings.vl_max_file_mb,
-    )
-    return DocChunker.chunk(docs)
- 
-def get_llm_client():
-    """根据 settings 初始化 LLM 客户端。"""
-    from openai import OpenAI
-    return OpenAI(
-        base_url=settings.llm_api_base,
-        api_key=settings.llm_api_key or "EMPTY",
-    )
- 
-if __name__ == "__main__":
-    # 打印当前配置（api_key 脱敏）
-    print("=== 当前配置 ===")
-    print(f"OCR 后端:    {settings.vl_backend or '本地CPU'}")
-    print(f"OCR 地址:    {settings.vl_server_url or '无'}")
-    print(f"LLM 模型:    {settings.llm_model}")
-    print(f"LLM 地址:    {settings.llm_api_base}")
-    print(f"Milvus:      {settings.milvus_host}:{settings.milvus_port}")
-    print(f"Embedding:   {settings.embedding_model}")
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from config.settings import settings
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)5s] %(name)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# 启动 / 关闭生命周期
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时预热（可选，提前加载模型避免第一次请求慢）
+    logger.info("服务启动，配置:")
+    logger.info("  upload_dir : %s", settings.upload_dir)
+    logger.info("  db_path    : %s", settings.db_path)
+    logger.info("  milvus     : %s:%s", settings.milvus_host, settings.milvus_port)
+    logger.info("  embedding  : %s @ %s", settings.embedding_model, settings.embedding_device)
+    logger.info("  vl_backend : %s", settings.vl_backend or "本地CPU")
+    logger.info("  vl_url     : %s", settings.vl_server_url or "无")
+    yield
+    logger.info("服务关闭")
+
+
+# ---------------------------------------------------------------------------
+# FastAPI 应用
+# ---------------------------------------------------------------------------
+
+app = FastAPI(
+    title="RAG 知识库 API",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 挂载路由
+from api.routes.ingest import router as ingest_router
+app.include_router(ingest_router)
+
+
+# ---------------------------------------------------------------------------
+# 健康检查
+# ---------------------------------------------------------------------------
+
+@app.get("/api/health")
+async def health():
+    from core.dedup import Dedup
+    stats = Dedup.stats()
+    return {
+        "status": "ok",
+        "stats":  stats,
+    }
