@@ -35,8 +35,11 @@ from fastapi.staticfiles import StaticFiles
 
 from config.settings import settings
 
+log_level_name = settings.log_level.upper()
+log_level = getattr(logging, log_level_name, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format="%(asctime)s [%(levelname)5s] %(name)s - %(message)s",
     datefmt="%H:%M:%S",
 )
@@ -49,6 +52,7 @@ STATIC_DIR.mkdir(exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("服务启动:")
+    logger.info("  log_level  : %s", log_level_name)
     logger.info("  upload_dir : %s", settings.upload_dir)
     logger.info("  db_path    : %s", settings.db_path)
     logger.info("  milvus     : %s:%s  collection=%s",

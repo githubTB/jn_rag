@@ -120,7 +120,6 @@ class ImageExtractor(BaseExtractor):
         self,
         file_path: str,
         *,
-        doc_type: str = "unknown", 
         max_file_mb: float = 50.0,
         use_layout_detection: bool | None = None,
         use_doc_orientation_classify: bool = False,
@@ -131,11 +130,11 @@ class ImageExtractor(BaseExtractor):
         device: str | None = None,
         output_format: str = "markdown",
         release_pipeline_after_extract: bool | None = None,
+        doc_type: str = "unknown",       # 文件类型，路由 OCR 引擎
         max_pixels: int | None = None,  # 废弃参数，静默忽略
         **_ignored,
     ):
         self._file_path = file_path
-        self._doc_type = doc_type
         self._max_file_mb = max_file_mb
         self._use_layout_detection = use_layout_detection
         self._use_doc_orientation_classify = use_doc_orientation_classify
@@ -161,25 +160,6 @@ class ImageExtractor(BaseExtractor):
         path = Path(self._file_path)
         is_url = self._file_path.startswith(("http://", "https://"))
         ext = path.suffix.lower()
-
-        # ── doc_type 路由：PP-OCRv4 / GOT-OCR2 / PaddleOCR-VL ────────
-        # license/invoice/table/document → PP-OCRv4（轻量，CPU）
-        # nameplate → GOT-OCR2（复杂场景，GPU）
-        # unknown → PaddleOCR-VL 兜底
-        if not is_url and self._doc_type != "unknown":
-            try:
-                from extractor.ocr_router import route_ocr
-                logger.info("[VL] doc_type=%s，走 OCR 路由", self._doc_type)
-                return route_ocr(
-                    self._file_path,
-                    doc_type=self._doc_type,
-                    vl_rec_backend=self._vl_rec_backend,
-                    vl_rec_server_url=self._vl_rec_server_url,
-                    device=self._device,
-                )
-            except Exception as exc:
-                logger.warning("[VL] OCR 路由失败，降级到 PaddleOCR-VL: %s", exc)
-                # 降级继续走下面的 PaddleOCR-VL 流程
 
         infer_path: str = self._file_path
         tmp_path: Path | None = None
@@ -265,12 +245,10 @@ class ImageExtractor(BaseExtractor):
             logger.warning("[VL] 扩展名与实际格式不符 (%s vs %s)，尝试继续", ext, detected_mime)
 
         # 用 Pillow verify() 轻量校验，只读文件头，不解码整张图
-        # 比 cv2.imread 省 10-50x 内存（尤其对 4K+ 原图）
         try:
             from PIL import Image
             with Image.open(path) as probe:
-                probe.verify()   # 只读头部，不解码像素
-            # verify() 后需重新 open 才能读尺寸
+                probe.verify()
             with Image.open(path) as probe:
                 w, h = probe.size
             logger.info("[VL] 图片尺寸: %dx%d px", w, h)
@@ -309,10 +287,10 @@ class ImageExtractor(BaseExtractor):
                 except Exception as e:
                     logger.debug("[VL] EXIF 修正跳过: %s", e)
 
-                # 超大图降采样（>3500px 长边）
+                # 压缩：长边超过 2000px 就降采样（发给远程 vLLM，减少传输和推理时间）
                 w, h = img.size
-                if max(w, h) > 3500:
-                    scale = 3500 / max(w, h)
+                if max(w, h) > 2000:
+                    scale = 2000 / max(w, h)
                     nw, nh = max(1, int(w * scale)), max(1, int(h * scale))
                     resized = img.resize((nw, nh), Image.LANCZOS)
                     if resized is not img and img is not opened:
@@ -334,7 +312,7 @@ class ImageExtractor(BaseExtractor):
             tmp = Path(tempfile.gettempdir()) / f"_vlocr_{uuid.uuid4().hex}{suffix}"
             kwargs: dict = {}
             if suffix in (".jpg", ".jpeg"):
-                kwargs = {"quality": 92, "optimize": True}
+                kwargs = {"quality": 85, "optimize": True}
             output_img.save(tmp, **kwargs)
             return tmp
         finally:
@@ -361,8 +339,8 @@ class ImageExtractor(BaseExtractor):
         if self._use_layout_detection is not None:
             kwargs["use_layout_detection"] = self._use_layout_detection
 
-        logger.info("[VL] pipeline 参数: backend=%s url=%s device=%s doc_type=%s",
-                    self._vl_rec_backend, self._vl_rec_server_url, self._device, self._doc_type)
+        logger.info("[VL] pipeline 参数: backend=%s url=%s device=%s",
+                    self._vl_rec_backend, self._vl_rec_server_url, self._device)
         return kwargs
 
     def _run_pipeline(self, infer_path: str) -> list[tuple[str, dict]]:
@@ -557,3 +535,4 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"^\|?[-:| ]+\|?\s*$", "", text, flags=re.MULTILINE)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+    

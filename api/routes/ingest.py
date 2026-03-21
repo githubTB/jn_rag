@@ -317,19 +317,33 @@ async def scan_company_dir(
             "message":    "目录下没有找到支持的文件",
         })
 
-    # 为每个文件确定 doc_type（用完整路径推断，含目录语义）
-    tasks: list[dict] = []
+    # 为每个文件确定 doc_type，同时按是否需要 OCR 分两个队列
+    # 文档类（docx/xlsx/pdf/csv/txt）：直接读文字，快，优先处理
+    # 图片类（jpg/png/tiff 等）：需要远程 vLLM，慢，串行排队
+    _DOC_SUFFIXES = {".docx", ".doc", ".docm", ".xlsx", ".xls", ".csv",
+                     ".txt", ".md", ".html", ".htm", ".pptx", ".pdf"}
+    _IMG_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif"}
+
+    doc_tasks: list[dict] = []   # 文档类：优先同步处理
+    img_tasks: list[dict] = []   # 图片类：串行异步排队
+
     for f in all_files:
         dt = doc_type or _guess_doc_type(f)
-        tasks.append({"path": str(f), "doc_type": dt})
+        task = {"path": str(f), "doc_type": dt}
         logger.info("[Scan] %s  →  %s", f.relative_to(scan_dir), dt)
+        if f.suffix.lower() in _DOC_SUFFIXES:
+            doc_tasks.append(task)
+        else:
+            img_tasks.append(task)
 
-    logger.info("[Scan] company=%s 发现 %d 个文件", company_id, len(tasks))
+    all_tasks = doc_tasks + img_tasks
+    logger.info("[Scan] company=%s 文档类=%d 图片类=%d",
+                company_id, len(doc_tasks), len(img_tasks))
 
     if sync:
-        # 同步逐个处理
+        # 同步：文档类 → 图片类，逐个处理
         results = []
-        for task in tasks:
+        for task in all_tasks:
             result = IngestTask.run(
                 task["path"],
                 company_id=company_id,
@@ -340,31 +354,42 @@ async def scan_company_dir(
                 "doc_type": task["doc_type"],
                 "status":   result.get("status"),
                 "chunks":   result.get("new_chunks", 0),
+                "error":    result.get("error"),
             })
         return JSONResponse({
             "status":     "done",
             "company_id": company_id,
-            "total":      len(tasks),
+            "total":      len(all_tasks),
+            "doc_count":  len(doc_tasks),
+            "img_count":  len(img_tasks),
             "results":    results,
         })
     else:
-        # 异步批量处理
-        for task in tasks:
-            background_tasks.add_task(
-                IngestTask.run,
-                task["path"],
-                company_id=company_id,
-                doc_type=task["doc_type"],
-            )
+        # 异步：文档类立即在 background 串行处理；图片类排在后面串行
+        # 同一个 background task 保证顺序：文档先，图片后，不打爆 vLLM
+        def _run_serial(task_list: list[dict], cid: str) -> None:
+            for t in task_list:
+                try:
+                    IngestTask.run(t["path"], company_id=cid, doc_type=t["doc_type"])
+                except Exception as exc:
+                    logger.error("[Scan] 文件处理异常: %s  %s", t["path"], exc)
+
+        background_tasks.add_task(_run_serial, all_tasks, company_id)
         return JSONResponse({
             "status":     "processing",
             "company_id": company_id,
-            "total":      len(tasks),
+            "total":      len(all_tasks),
+            "doc_count":  len(doc_tasks),
+            "img_count":  len(img_tasks),
             "files":      [
-                {"file": Path(t["path"]).name, "doc_type": t["doc_type"]}
-                for t in tasks
+                {"file": Path(t["path"]).name, "doc_type": t["doc_type"],
+                 "queue": "doc" if t in doc_tasks else "img"}
+                for t in all_tasks
             ],
-            "message":    f"已提交 {len(tasks)} 个文件到后台处理",
+            "message":    (
+                f"共 {len(all_tasks)} 个文件：文档类 {len(doc_tasks)} 个优先处理，"
+                f"图片类 {len(img_tasks)} 个排队（vLLM 串行，每次 1 张）"
+            ),
         }, status_code=202)
 
 # ---------------------------------------------------------------------------

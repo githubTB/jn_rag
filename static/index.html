@@ -16,8 +16,6 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Inter','Noto Serif SC',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh;display:flex;flex-direction:column}
-
-/* header */
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(26,26,46,0.05)}
 .brand{display:flex;align-items:center;gap:10px;font-family:'Noto Serif SC',serif;font-weight:700;font-size:1.1rem;color:var(--accent);text-decoration:none}
 .brand-icon{width:30px;height:30px;background:var(--accent);border-radius:8px;display:grid;place-items:center;color:#fff;font-size:14px;flex-shrink:0}
@@ -31,31 +29,21 @@ nav{display:flex;gap:2px}
 .dot.ok{background:#22c55e;box-shadow:0 0 5px #22c55e80}
 .dot.warn{background:#f59e0b}
 .dot.err{background:var(--danger)}
-
-/* views */
 .view{display:none;flex:1;max-width:1280px;width:100%;margin:0 auto;padding:24px 20px}
 .view.active{display:block}
-
-/* card */
 .card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden}
 .card+.card{margin-top:14px}
 .ch{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-weight:600;font-size:0.87rem}
 .ch .ic{color:var(--accent);font-size:0.95rem}
 .cb{padding:18px}
-
-/* grid */
 .g2{display:grid;grid-template-columns:290px 1fr;gap:18px;align-items:start}
 .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 @media(max-width:860px){.g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}}
-
-/* stat card */
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
 .stat-v{font-size:1.9rem;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace;line-height:1}
 .stat-l{font-size:0.77rem;color:var(--ink-muted);margin-top:6px}
 .stat-s{font-size:0.7rem;color:var(--ink-muted);margin-top:3px;font-family:'JetBrains Mono',monospace}
-
-/* buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border:none;border-radius:8px;font-size:0.83rem;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
 .btn-p{background:var(--accent);color:#fff}
 .btn-p:hover:not(:disabled){background:var(--accent-h);transform:translateY(-1px);box-shadow:0 4px 12px rgba(92,107,192,.28)}
@@ -63,23 +51,19 @@ nav{display:flex;gap:2px}
 .btn-g:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
 .btn-d{background:transparent;color:var(--danger);border:1px solid rgba(192,57,43,.22)}
 .btn-d:hover:not(:disabled){background:rgba(192,57,43,.05)}
+.btn-warn{background:transparent;color:var(--warn);border:1px solid rgba(180,83,9,.22)}
+.btn-warn:hover:not(:disabled){background:rgba(180,83,9,.05)}
 .btn-sm{padding:5px 10px;font-size:0.77rem}
 .btn-fw{width:100%}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
-
-/* form */
 .fg{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
 .fl{font-size:0.73rem;color:var(--ink-muted);font-weight:500}
 .fi{border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:0.82rem;outline:none;transition:border-color .2s;background:var(--paper);color:var(--ink);font-family:inherit;width:100%}
 .fi:focus{border-color:var(--accent)}
 select.fi{cursor:pointer}
-
-/* drop zone */
 .dz{border:2px dashed var(--border);border-radius:8px;padding:26px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--paper)}
 .dz:hover,.dz.over{border-color:var(--accent);background:var(--accent-bg)}
 .dz input{display:none}
-
-/* tags */
 .tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.69rem;font-weight:600;line-height:1.6}
 .tg-license{background:#fff7ed;color:#c2410c}
 .tg-invoice{background:#f0fdf4;color:#166534}
@@ -90,8 +74,8 @@ select.fi{cursor:pointer}
 .tg-done{background:#f0fdf4;color:#166534}
 .tg-failed{background:#fef2f2;color:#991b1b}
 .tg-pending{background:#fffbeb;color:#92400e}
-
-/* company cards */
+.tg-confirmed{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.tg-auto{background:#f1f5f9;color:#64748b;border:1px dashed #cbd5e1}
 .company-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
 .cc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);transition:all .18s;cursor:pointer}
 .cc:hover,.cc.sel{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 20px rgba(92,107,192,.14)}
@@ -102,30 +86,26 @@ select.fi{cursor:pointer}
 .cc-stat-v{font-size:1.05rem;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace}
 .cc-stat-l{font-size:0.67rem;color:var(--ink-muted)}
 
-/* file rows */
-.frow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;transition:background .12s;font-size:0.81rem}
-.frow:hover{background:var(--paper)}
-.fname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft)}
-.fmeta{font-family:'JetBrains Mono',monospace;font-size:0.69rem;color:var(--ink-muted);white-space:nowrap}
+/* 文件行 - 新增操作列 */
+.frow{display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;transition:background .12s;border:1px solid transparent}
+.frow:hover{background:var(--paper);border-color:var(--border)}
+.frow+.frow{margin-top:4px}
+.fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft);font-size:0.82rem}
+.frow-actions{display:flex;align-items:center;gap:6px}
 
-/* type distribution */
-.dist-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1px;margin:8px 0}
-.dist-leg{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
-.dist-item{display:flex;align-items:center;gap:4px;font-size:0.71rem;color:var(--ink-muted)}
-.dist-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+/* doc_type 下拉选择器 */
+.dt-select{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:0.75rem;background:var(--paper);color:var(--ink);outline:none;font-family:inherit;cursor:pointer;transition:border-color .15s}
+.dt-select:focus{border-color:var(--accent)}
+.dt-select.changed{border-color:var(--warn);background:#fffbeb}
 
-/* search / query */
 .sbar{display:flex;gap:10px}
 .sbar input{flex:1;border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;font-size:0.92rem;outline:none;transition:border-color .2s;background:var(--surface);font-family:inherit}
 .sbar input:focus{border-color:var(--accent)}
 .sopts{display:flex;align-items:center;gap:10px;font-size:0.78rem;color:var(--ink-muted);margin-top:8px;flex-wrap:wrap}
 .sopts select{border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:0.78rem;background:var(--paper);color:var(--ink);outline:none;font-family:inherit}
-
-/* answer */
 .ah{display:flex;align-items:center;gap:8px;padding:11px 18px;border-bottom:1px solid var(--border)}
 .mbadge{font-family:'JetBrains Mono',monospace;font-size:0.69rem;padding:2px 7px;background:var(--accent-bg);color:var(--accent);border-radius:4px;border:1px solid rgba(92,107,192,.18)}
 #answer-body{padding:18px;font-size:0.9rem;line-height:1.8;white-space:pre-wrap}
-#answer-body .ref{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--accent);background:var(--accent-bg);padding:1px 4px;border-radius:3px}
 .ri{border:1px solid var(--border);border-radius:9px;padding:12px 14px;transition:box-shadow .18s,border-color .18s;background:var(--surface);margin-bottom:9px}
 .ri:hover{box-shadow:var(--shadow);border-color:rgba(92,107,192,.28)}
 .ri-top{display:flex;align-items:flex-start;gap:9px;margin-bottom:7px}
@@ -133,46 +113,40 @@ select.fi{cursor:pointer}
 .ri-meta{font-size:0.75rem;color:var(--ink-muted);line-height:1.6}
 .ri-text{font-size:0.8rem;color:var(--ink-soft);line-height:1.7;max-height:88px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .ri-score{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--ink-muted);margin-top:5px}
-
-/* scan log */
 .slog{background:#1a1a2e;color:#a8d8a8;border-radius:8px;padding:13px;font-family:'JetBrains Mono',monospace;font-size:0.76rem;line-height:1.7;max-height:220px;overflow-y:auto;margin-top:12px;display:none}
 .slog.on{display:block}
-
-/* progress */
 .prog{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:8px;display:none}
 .prog.on{display:block}
 .prog-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
-
-/* modal */
 .modal{display:none;position:fixed;inset:0;background:rgba(26,26,46,.42);z-index:300;place-items:center}
 .modal.open{display:grid}
 .mbox{background:var(--surface);border-radius:var(--radius);padding:24px;min-width:340px;max-width:500px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.18);position:relative}
 .mtitle{font-weight:700;font-size:0.97rem;margin-bottom:16px}
 .mclose{position:absolute;top:13px;right:13px;background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--ink-muted)}
-
-/* toast */
 #toast{position:fixed;bottom:22px;right:22px;padding:10px 16px;border-radius:10px;font-size:0.83rem;font-weight:500;max-width:340px;box-shadow:0 4px 18px rgba(0,0,0,.14);transform:translateY(70px);opacity:0;transition:all .28s cubic-bezier(.34,1.56,.64,1);z-index:999;pointer-events:none}
 #toast.show{transform:translateY(0);opacity:1}
 #toast.success{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
 #toast.error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
 #toast.warning{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
 #toast.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
-
-/* misc */
 .empty{text-align:center;padding:44px 20px;color:var(--ink-muted)}
 .empty .big{font-size:2.4rem;margin-bottom:10px;opacity:.2}
-.slabel{font-size:0.74rem;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.slabel::after{content:'';flex:1;height:1px;background:var(--border)}
+.dist-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1px;margin:8px 0}
+.dist-leg{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.dist-item{display:flex;align-items:center;gap:4px;font-size:0.71rem;color:var(--ink-muted)}
+.dist-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{animation:spin .8s linear infinite;display:inline-block}
-
-/* health modal rows */
 .hrow{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:0.82rem}
 .hrow:last-child{border:none}
 .hkey{color:var(--ink-soft)}
 .hval{font-family:'JetBrains Mono',monospace;font-size:0.75rem}
 .ok{color:var(--success);font-weight:600}
 .fail{color:var(--danger);font-weight:600}
+
+/* 重处理状态指示 */
+.reprocess-btn{transition:all .2s}
+.reprocess-btn.processing{opacity:.6;pointer-events:none}
 </style>
 </head>
 <body>
@@ -195,17 +169,14 @@ select.fi{cursor:pointer}
 
 <div id="toast"></div>
 
-<!-- ══════════════════════════════════════
-     概览
-══════════════════════════════════════ -->
+<!-- 概览 -->
 <div class="view active" id="view-overview">
   <div class="g4" style="margin-bottom:18px">
     <div class="stat"><div class="stat-v" id="sv-companies">-</div><div class="stat-l">企业数量</div></div>
     <div class="stat"><div class="stat-v" id="sv-files">-</div><div class="stat-l">已入库文件</div><div class="stat-s" id="sv-files-s"></div></div>
-    <div class="stat"><div class="stat-v" id="sv-chunks">-</div><div class="stat-l">Chunk 总数</div></div>
+    <div class="stat"><div class="stat-v" id="sv-confirmed">-</div><div class="stat-l">人工已确认</div><div class="stat-s" id="sv-confirmed-s"></div></div>
     <div class="stat"><div class="stat-v" id="sv-vectors">-</div><div class="stat-l">向量数量</div><div class="stat-s" id="sv-vstate"></div></div>
   </div>
-
   <div class="g2">
     <div>
       <div class="card">
@@ -232,9 +203,7 @@ select.fi{cursor:pointer}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     企业管理
-══════════════════════════════════════ -->
+<!-- 企业管理 -->
 <div class="view" id="view-companies">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <span style="font-weight:600;font-size:.95rem">企业列表</span>
@@ -244,27 +213,31 @@ select.fi{cursor:pointer}
     <div class="empty"><div class="big">🏢</div>暂无企业</div>
   </div>
 
-  <!-- 企业详情 -->
   <div class="card" id="company-detail" style="display:none;margin-top:18px">
     <div class="ch">
       <span class="ic">📁</span>
       <span id="detail-name">文件列表</span>
+      <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
       <span style="flex:1"></span>
       <button class="btn btn-g btn-sm" onclick="switchView('ingest')" style="margin-right:6px">扫描入库</button>
       <button class="btn btn-d btn-sm" id="detail-del-btn">删除企业</button>
       <button class="btn btn-g btn-sm" onclick="closeDetail()" style="margin-left:6px">关闭</button>
     </div>
-    <div class="cb" id="detail-files"></div>
+    <!-- 列表头 -->
+    <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;padding:8px 12px;font-size:.71rem;font-weight:600;color:var(--ink-muted);border-bottom:1px solid var(--border)">
+      <span>文件名</span>
+      <span style="text-align:center;min-width:100px">文件类型</span>
+      <span style="text-align:center;min-width:54px">确认</span>
+      <span style="text-align:center;min-width:54px">状态</span>
+      <span style="text-align:center;min-width:120px">操作</span>
+    </div>
+    <div class="cb" id="detail-files" style="padding:8px 12px"></div>
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     文件入库
-══════════════════════════════════════ -->
+<!-- 文件入库 -->
 <div class="view" id="view-ingest">
   <div class="g2">
-
-    <!-- 单文件上传 -->
     <div>
       <div class="card">
         <div class="ch"><span class="ic">📤</span>上传文件</div>
@@ -277,7 +250,6 @@ select.fi{cursor:pointer}
             <div style="font-size:.73rem;color:var(--ink-muted);margin-top:3px">PDF · DOCX · XLSX · JPG · PNG 等</div>
           </div>
           <div id="flist" style="margin-top:9px;display:flex;flex-direction:column;gap:4px"></div>
-
           <div style="margin-top:13px">
             <div class="fg">
               <label class="fl">所属企业</label>
@@ -295,25 +267,19 @@ select.fi{cursor:pointer}
               </select>
             </div>
           </div>
-
           <div class="prog" id="ul-prog"><div class="prog-bar" id="ul-bar" style="width:0"></div></div>
           <div style="font-size:.73rem;color:var(--ink-muted);text-align:center;margin-top:4px" id="ul-status"></div>
-
           <button class="btn btn-p btn-fw" id="ul-btn" style="margin-top:8px">⚙️ 处理并入库</button>
         </div>
       </div>
     </div>
-
-    <!-- 目录扫描 -->
     <div>
       <div class="card">
         <div class="ch"><span class="ic">📂</span>扫描企业目录</div>
         <div class="cb">
           <div style="font-size:.81rem;color:var(--ink-muted);line-height:1.7;margin-bottom:14px">
-            自动递归扫描 <code style="background:var(--paper);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:.8rem">uploaded_files/{企业ID}/</code><br>
-            根据目录名+文件名自动推断 doc_type，跳过 .DS_Store / .dwg 等无法处理的文件。
+            自动递归扫描 <code style="background:var(--paper);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:.8rem">uploaded_files/{企业ID}/</code>
           </div>
-
           <div class="fg">
             <label class="fl">选择企业 *</label>
             <select class="fi" id="sc-company"><option value="">请先创建企业</option></select>
@@ -329,7 +295,6 @@ select.fi{cursor:pointer}
               <option value="document">文档</option>
             </select>
           </div>
-
           <div style="display:flex;gap:8px;margin-top:4px">
             <button class="btn btn-p" style="flex:1" id="sc-async-btn" onclick="doScan(false)">🚀 异步扫描</button>
             <button class="btn btn-g" style="flex:1" id="sc-sync-btn"  onclick="doScan(true)">⏳ 同步等待</button>
@@ -337,7 +302,6 @@ select.fi{cursor:pointer}
           <div class="slog" id="slog"></div>
         </div>
       </div>
-
       <div class="card">
         <div class="ch"><span class="ic">🗑</span>知识库管理</div>
         <div class="cb">
@@ -349,9 +313,7 @@ select.fi{cursor:pointer}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     智能问答
-══════════════════════════════════════ -->
+<!-- 智能问答 -->
 <div class="view" id="view-query">
   <div class="card" style="margin-bottom:14px">
     <div class="ch"><span class="ic">💬</span>智能问答</div>
@@ -377,15 +339,14 @@ select.fi{cursor:pointer}
       </div>
     </div>
   </div>
-
   <div class="card" id="answer-card" style="display:none;margin-bottom:14px">
     <div class="ah">
       <span style="font-weight:600;font-size:.87rem">🤖 AI 回答</span>
       <span class="mbadge" id="q-model"></span>
+      <span id="q-reranker" style="font-size:.72rem;color:var(--success);margin-left:6px"></span>
     </div>
     <div id="answer-body"></div>
   </div>
-
   <div class="card">
     <div class="ch"><span class="ic">📑</span>检索来源</div>
     <div class="cb">
@@ -396,9 +357,7 @@ select.fi{cursor:pointer}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     弹窗：新建企业
-══════════════════════════════════════ -->
+<!-- 弹窗：新建企业 -->
 <div class="modal" id="m-create">
   <div class="mbox">
     <button class="mclose" onclick="closeModal('m-create')">✕</button>
@@ -418,9 +377,7 @@ select.fi{cursor:pointer}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════
-     弹窗：系统状态
-══════════════════════════════════════ -->
+<!-- 弹窗：系统状态 -->
 <div class="modal" id="m-health">
   <div class="mbox">
     <button class="mclose" onclick="closeModal('m-health')">✕</button>
@@ -430,36 +387,25 @@ select.fi{cursor:pointer}
 </div>
 
 <script>
-// ══════════════════════════════════════
-// 常量
-// ══════════════════════════════════════
 const TYPE_COLOR = {license:'#fdba74',invoice:'#86efac',table:'#93c5fd',nameplate:'#d8b4fe',document:'#94a3b8',unknown:'#e2e8f0'};
 const TYPE_LABEL = {license:'营业执照',invoice:'发票',table:'表格',nameplate:'铭牌',document:'文档',unknown:'未知'};
 const STATUS_LABEL = {done:'完成',failed:'失败',pending:'处理中'};
 const STATUS_CLS   = {done:'tg-done',failed:'tg-failed',pending:'tg-pending'};
+const DOC_TYPES    = ['license','invoice','table','nameplate','document','unknown'];
 
-// ══════════════════════════════════════
-// 全局状态
-// ══════════════════════════════════════
 let healthData = {}, companies = [], uploadFiles = [];
 
-// ══════════════════════════════════════
-// 视图切换
-// ══════════════════════════════════════
+// ── 视图切换 ──────────────────────────────────────────────────────────────
 function switchView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.view === name);
-  });
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   document.getElementById('view-' + name).classList.add('active');
   if (name === 'overview')  loadOverview();
   if (name === 'companies') loadCompanies();
   if (name === 'ingest' || name === 'query') refreshSelects();
 }
 
-// ══════════════════════════════════════
-// Toast
-// ══════════════════════════════════════
+// ── Toast ─────────────────────────────────────────────────────────────────
 let _tt;
 function toast(msg, type='info') {
   const el = document.getElementById('toast');
@@ -472,17 +418,13 @@ document.querySelectorAll('.modal').forEach(m =>
   m.addEventListener('click', e => { if (e.target===m) m.classList.remove('open'); })
 );
 
-// ══════════════════════════════════════
-// 健康检查
-// ══════════════════════════════════════
+// ── 健康检查 ──────────────────────────────────────────────────────────────
 async function fetchHealth() {
   try {
     healthData = await fetch('/api/health').then(r => r.json());
     const ok = healthData.milvus;
     document.getElementById('sdot').className = 'dot ' + (ok ? 'ok' : 'warn');
-    document.getElementById('stxt').textContent = ok
-      ? (healthData.llm_model||'Qwen') + ' · 就绪'
-      : 'Milvus 未连接';
+    document.getElementById('stxt').textContent = ok ? (healthData.llm_model||'Qwen') + ' · 就绪' : 'Milvus 未连接';
   } catch {
     document.getElementById('sdot').className = 'dot err';
     document.getElementById('stxt').textContent = '服务离线';
@@ -491,56 +433,41 @@ async function fetchHealth() {
 function showHealth() {
   const d = healthData;
   document.getElementById('health-rows').innerHTML = [
-    ['状态',      d.milvus ? '<span class="ok">✓ 正常</span>' : '<span class="fail">⚠ 部分不可用</span>'],
-    ['Milvus',    d.milvus ? '<span class="ok">✓ 已连接</span>' : '<span class="fail">✗ 未连接</span>'],
-    ['集合',      d.collection||'-'],
-    ['向量模型',  d.embed_model||'-'],
-    ['推理设备',  d.embed_device||'cpu'],
-    ['OCR 后端',  d.vl_backend||'本地CPU'],
-    ['GOT-OCR2',  d.got_ocr_ready ? '<span class="ok">✓ 已部署</span>' : '<span style="color:var(--ink-muted)">未部署（降级）</span>'],
-    ['对话模型',  d.llm_model||'-'],
-    ['LLM 地址',  d.llm_api_base||'-'],
+    ['状态',    d.milvus ? '<span class="ok">✓ 正常</span>' : '<span class="fail">⚠ 部分不可用</span>'],
+    ['Milvus',  d.milvus ? '<span class="ok">✓ 已连接</span>' : '<span class="fail">✗ 未连接</span>'],
+    ['集合',    d.collection||'-'],
+    ['向量模型',d.embed_model||'-'],
+    ['推理设备',d.embed_device||'cpu'],
+    ['OCR 后端',d.vl_backend||'本地CPU'],
+    ['对话模型',d.llm_model||'-'],
+    ['LLM 地址',d.llm_api_base||'-'],
   ].map(([k,v]) => `<div class="hrow"><span class="hkey">${k}</span><span class="hval">${v}</span></div>`).join('');
   openModal('m-health');
 }
 fetchHealth();
 setInterval(fetchHealth, 30000);
 
-// ══════════════════════════════════════
-// 概览
-// ══════════════════════════════════════
+// ── 概览 ──────────────────────────────────────────────────────────────────
 async function loadOverview() {
   await fetchHealth();
-  const d = healthData;
-  const s = d.stats || {};
-
+  const d = healthData, s = d.stats || {};
   document.getElementById('sv-companies').textContent = s.total_companies ?? '-';
   document.getElementById('sv-files').textContent     = s.done_files ?? '-';
-  document.getElementById('sv-files-s').textContent   =
-    `失败 ${s.failed_files||0} · 处理中 ${Math.max(0,(s.total_files||0)-(s.done_files||0)-(s.failed_files||0))}`;
-  document.getElementById('sv-chunks').textContent   = s.total_chunks ?? '-';
-  document.getElementById('sv-vectors').textContent  = d.vector_count ?? '-';
-  document.getElementById('sv-vstate').textContent   = d.milvus ? 'Milvus ✓' : 'Milvus 未连接';
+  document.getElementById('sv-files-s').textContent   = `失败 ${s.failed_files||0} · 处理中 ${Math.max(0,(s.total_files||0)-(s.done_files||0)-(s.failed_files||0))}`;
+  document.getElementById('sv-confirmed').textContent = s.confirmed_files ?? '-';
+  document.getElementById('sv-confirmed-s').textContent = `共 ${s.total_files||0} 个文件`;
+  document.getElementById('sv-vectors').textContent   = d.vector_count ?? '-';
+  document.getElementById('sv-vstate').textContent    = d.milvus ? 'Milvus ✓' : 'Milvus 未连接';
 
-  // 类型分布
-  const byType = s.by_doc_type || {};
-  const total  = Object.values(byType).reduce((a,b)=>a+b,0) || 0;
-  const distEmpty = document.getElementById('dist-empty');
-  if (total === 0) {
-    document.getElementById('dist-bar').innerHTML = '';
-    document.getElementById('dist-leg').innerHTML = '';
-    distEmpty.style.display = 'block';
-  } else {
-    distEmpty.style.display = 'none';
+  const byType = s.by_doc_type || {}, total = Object.values(byType).reduce((a,b)=>a+b,0)||0;
+  document.getElementById('dist-empty').style.display = total===0 ? 'block' : 'none';
+  if (total > 0) {
     document.getElementById('dist-bar').innerHTML = Object.entries(byType).map(([t,n]) =>
-      `<div style="width:${(n/total*100).toFixed(1)}%;background:${TYPE_COLOR[t]||'#e2e8f0'};height:100%"></div>`
-    ).join('');
+      `<div style="width:${(n/total*100).toFixed(1)}%;background:${TYPE_COLOR[t]||'#e2e8f0'};height:100%"></div>`).join('');
     document.getElementById('dist-leg').innerHTML = Object.entries(byType).map(([t,n]) =>
-      `<div class="dist-item"><div class="dist-dot" style="background:${TYPE_COLOR[t]||'#e2e8f0'}"></div>${TYPE_LABEL[t]||t} (${n})</div>`
-    ).join('');
+      `<div class="dist-item"><div class="dist-dot" style="background:${TYPE_COLOR[t]||'#e2e8f0'}"></div>${TYPE_LABEL[t]||t} (${n})</div>`).join('');
   }
 
-  // 系统状态
   document.getElementById('sys-detail').innerHTML = [
     `Milvus：<strong>${d.milvus?'✓ 在线':'✗ 离线'}</strong>  ${d.milvus_host||'localhost'}:${d.milvus_port||19530}`,
     `向量模型：<strong>${d.embed_model||'-'}</strong>  ${d.embed_device||'cpu'}`,
@@ -548,7 +475,6 @@ async function loadOverview() {
     `LLM：<strong>${d.llm_model||'-'}</strong>`,
   ].map(s=>`<div>${s}</div>`).join('');
 
-  // 企业快览
   await loadCompaniesData();
   const el = document.getElementById('ov-companies');
   if (!companies.length) {
@@ -556,18 +482,14 @@ async function loadOverview() {
     return;
   }
   el.innerHTML = companies.map(c => `
-    <div class="frow" style="cursor:pointer" onclick="switchView('companies')">
-      <span>🏢</span>
-      <span class="fname" style="font-weight:500">${c.name}</span>
-      <span class="fmeta">${c.file_count} 文件</span>
-      <span class="fmeta" style="margin-left:4px;color:var(--success)">${c.done_count} 完成</span>
-    </div>
-  `).join('');
+    <div class="frow" style="cursor:pointer;grid-template-columns:1fr auto auto" onclick="switchView('companies')">
+      <span class="fname" style="font-weight:500">🏢 ${c.name}</span>
+      <span style="font-size:.75rem;color:var(--ink-muted)">${c.file_count} 文件</span>
+      <span style="font-size:.75rem;color:var(--success)">${c.done_count} 完成</span>
+    </div>`).join('');
 }
 
-// ══════════════════════════════════════
-// 企业管理
-// ══════════════════════════════════════
+// ── 企业管理 ──────────────────────────────────────────────────────────────
 let selectedCid = null;
 
 async function loadCompaniesData() {
@@ -589,12 +511,11 @@ async function loadCompanies() {
       <div class="cc-name">${c.name}</div>
       <div class="cc-id">${c.company_id}</div>
       <div class="cc-stats">
-        <div class="cc-stat-v">${c.file_count}</div><div class="cc-stat-l" style="margin-right:10px">文件</div>
-        <div class="cc-stat-v">${c.done_count}</div><div class="cc-stat-l" style="margin-right:10px">完成</div>
-        <div class="cc-stat-v">${Math.max(0,c.file_count-c.done_count)}</div><div class="cc-stat-l">待处理</div>
+        <div><div class="cc-stat-v">${c.file_count}</div><div class="cc-stat-l">文件</div></div>
+        <div><div class="cc-stat-v">${c.done_count}</div><div class="cc-stat-l">完成</div></div>
+        <div><div class="cc-stat-v">${c.confirmed_count||0}</div><div class="cc-stat-l">已确认</div></div>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
 async function selectCompany(cid) {
@@ -603,21 +524,150 @@ async function selectCompany(cid) {
   try {
     const d = await fetch(`/api/companies/${cid}`).then(r=>r.json());
     document.getElementById('detail-name').textContent = d.name;
+    const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
+    const total     = (d.files||[]).length;
+    document.getElementById('detail-confirm-badge').textContent =
+      total ? `已确认 ${confirmed}/${total}` : '';
     document.getElementById('detail-del-btn').onclick = () => deleteCompany(cid, d.name);
-    document.getElementById('detail-files').innerHTML = !(d.files||[]).length
-      ? '<div class="empty"><div class="big">📁</div>暂无文件</div>'
-      : (d.files||[]).map(f => `
-          <div class="frow">
-            <span>📄</span>
-            <span class="fname" title="${f.filename}">${f.filename}</span>
-            <span class="tag tg-${f.doc_type||'unknown'}">${TYPE_LABEL[f.doc_type]||f.doc_type||'未知'}</span>
-            <span class="tag ${STATUS_CLS[f.status]||'tg-unknown'}">${STATUS_LABEL[f.status]||f.status}</span>
-          </div>`
-      ).join('');
+    renderFileList(d.files || [], cid);
     const detail = document.getElementById('company-detail');
     detail.style.display = 'block';
-    detail.scrollIntoView({behavior:'smooth',block:'nearest'});
+    detail.scrollIntoView({behavior:'smooth', block:'nearest'});
   } catch { toast('加载企业详情失败','error'); }
+}
+
+function renderFileList(files, cid) {
+  const el = document.getElementById('detail-files');
+  if (!files.length) {
+    el.innerHTML = '<div class="empty"><div class="big">📁</div>暂无文件</div>';
+    return;
+  }
+  el.innerHTML = files.map(f => {
+    const fileId    = f.file_id;   // 完整 file_id（后端已返回完整值）
+    const confirmed = f.doc_type_confirmed;
+    const confirmBadge = confirmed
+      ? '<span class="tag tg-confirmed" title="人工已确认">✓ 已确认</span>'
+      : '<span class="tag tg-auto" title="自动推断">自动</span>';
+
+    // doc_type 下拉，默认值为当前类型
+    const dtOptions = DOC_TYPES.map(t =>
+      `<option value="${t}" ${t===f.doc_type?'selected':''}>${TYPE_LABEL[t]||t}</option>`
+    ).join('');
+
+    return `
+    <div class="frow" id="frow-${fileId}">
+      <span class="fname" title="${f.filename}">📄 ${f.filename}</span>
+
+      <select class="dt-select" id="dt-${fileId}"
+        onchange="onDtChange('${fileId}', this)">
+        ${dtOptions}
+      </select>
+
+      <span>${confirmBadge}</span>
+
+      <span class="tag ${STATUS_CLS[f.status]||'tg-unknown'}">${STATUS_LABEL[f.status]||f.status}</span>
+
+      <div class="frow-actions">
+        <button class="btn btn-g btn-sm" id="save-dt-${fileId}" style="display:none"
+          onclick="saveDtType('${fileId}', '${cid}')">
+          💾 保存
+        </button>
+        <button class="btn btn-warn btn-sm reprocess-btn" id="repr-${fileId}"
+          onclick="reprocessFile('${fileId}', '${f.filename}')">
+          🔄 重新处理
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// doc_type 下拉变化时显示保存按钮
+function onDtChange(fileId, selectEl) {
+  const saveBtn = document.getElementById(`save-dt-${fileId}`);
+  if (saveBtn) {
+    saveBtn.style.display = 'inline-flex';
+    selectEl.classList.add('changed');
+  }
+}
+
+// 保存 doc_type 修改
+async function saveDtType(fileId, cid) {
+  const selectEl = document.getElementById(`dt-${fileId}`);
+  const saveBtn  = document.getElementById(`save-dt-${fileId}`);
+  if (!selectEl) return;
+
+  const newType = selectEl.value;
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<span class="spin">⚙️</span>';
+
+  try {
+    const r = await fetch(`/api/files/${fileId}/doc_type`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({doc_type: newType, confirmed: true}),
+    });
+    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'保存失败'); }
+    const d = await r.json();
+    toast(`已确认：${TYPE_LABEL[newType]}`, 'success');
+    selectEl.classList.remove('changed');
+    saveBtn.style.display = 'none';
+
+    // 刷新确认标记
+    const row = document.getElementById(`frow-${fileId}`);
+    if (row) {
+      const badge = row.querySelector('.tag.tg-auto, .tag.tg-confirmed');
+      if (badge) {
+        badge.className = 'tag tg-confirmed';
+        badge.title = '人工已确认';
+        badge.textContent = '✓ 已确认';
+      }
+    }
+    // 更新企业卡片确认数
+    await loadCompaniesData();
+    loadCompanies();
+    updateDetailBadge(cid);
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '💾 保存';
+  }
+}
+
+async function updateDetailBadge(cid) {
+  try {
+    const d = await fetch(`/api/companies/${cid}`).then(r=>r.json());
+    const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
+    const total     = (d.files||[]).length;
+    document.getElementById('detail-confirm-badge').textContent =
+      total ? `已确认 ${confirmed}/${total}` : '';
+  } catch {}
+}
+
+// 重新处理文件
+async function reprocessFile(fileId, filename) {
+  if (!confirm(`重新处理文件：${filename}\n\n将删除旧向量数据并重新解析入库，确认继续？`)) return;
+
+  const btn = document.getElementById(`repr-${fileId}`);
+  if (btn) { btn.classList.add('processing'); btn.innerHTML = '<span class="spin">🔄</span> 处理中'; }
+
+  try {
+    const r = await fetch(`/api/files/${fileId}/reprocess`, {method: 'POST'});
+    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'重处理失败'); }
+    const d = await r.json();
+    toast(`${filename} 已提交重新处理`, 'success');
+
+    // 更新该行状态为处理中
+    const row = document.getElementById(`frow-${fileId}`);
+    if (row) {
+      const statusTag = row.querySelector('.tag.tg-done, .tag.tg-failed, .tag.tg-pending');
+      if (statusTag) { statusTag.className='tag tg-pending'; statusTag.textContent='处理中'; }
+    }
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    if (btn) { btn.classList.remove('processing'); btn.innerHTML = '🔄 重新处理'; }
+  }
 }
 
 function closeDetail() {
@@ -640,9 +690,7 @@ async function createCompany() {
     if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'创建失败'); }
     toast(`企业"${name}"创建成功`,'success');
     closeModal('m-create');
-    await loadCompaniesData();
-    loadCompanies();
-    refreshSelects();
+    await loadCompaniesData(); loadCompanies(); refreshSelects();
   } catch(e) { toast(e.message,'error'); }
 }
 
@@ -655,15 +703,11 @@ async function deleteCompany(cid, name) {
     toast(`已删除企业"${name}"，${d.files_deleted} 个文件记录`,'success');
     selectedCid = null;
     document.getElementById('company-detail').style.display = 'none';
-    await loadCompaniesData();
-    loadCompanies();
-    refreshSelects();
+    await loadCompaniesData(); loadCompanies(); refreshSelects();
   } catch(e) { toast(e.message,'error'); }
 }
 
 function refreshSelects() {
-  const opts = '<option value="">— 全部/不选 —</option>' +
-    companies.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
   ['ul-company','sc-company','q-company'].forEach(id => {
     const el = document.getElementById(id);
     const first = el.options[0].outerHTML;
@@ -671,9 +715,7 @@ function refreshSelects() {
   });
 }
 
-// ══════════════════════════════════════
-// 文件上传
-// ══════════════════════════════════════
+// ── 文件上传 ──────────────────────────────────────────────────────────────
 const dzEl = document.getElementById('dz');
 const fuEl = document.getElementById('fu');
 dzEl.addEventListener('click', ()=>fuEl.click());
@@ -686,158 +728,133 @@ function removeFile(i){ uploadFiles.splice(i,1); renderFList(); }
 function renderFList(){
   document.getElementById('flist').innerHTML = uploadFiles.map((f,i)=>`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--paper);border-radius:6px;font-size:.79rem;color:var(--ink-soft)">
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px" title="${f.name}">${f.name}</span>
-      <button onclick="removeFile(${i})" style="background:none;border:none;cursor:pointer;color:var(--ink-muted);padding:2px 4px;font-size:12px">✕</button>
-    </div>`
-  ).join('');
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px">${f.name}</span>
+      <button onclick="removeFile(${i})" style="background:none;border:none;cursor:pointer;color:var(--ink-muted)">✕</button>
+    </div>`).join('');
 }
 
 document.getElementById('ul-btn').addEventListener('click', async ()=>{
   if (!uploadFiles.length) { toast('请先选择文件','warning'); return; }
-  const btn  = document.getElementById('ul-btn');
-  const prog = document.getElementById('ul-prog');
-  const bar  = document.getElementById('ul-bar');
-  const stat = document.getElementById('ul-status');
-  const cid  = document.getElementById('ul-company').value;
-  const dt   = document.getElementById('ul-type').value;
-
+  const btn=document.getElementById('ul-btn'), prog=document.getElementById('ul-prog');
+  const bar=document.getElementById('ul-bar'), stat=document.getElementById('ul-status');
+  const cid=document.getElementById('ul-company').value, dt=document.getElementById('ul-type').value;
   btn.disabled=true; btn.innerHTML='<span class="spin">⚙️</span> 处理中…';
   prog.classList.add('on');
-
   let ok=0,skip=0,fail=0;
   for (let i=0;i<uploadFiles.length;i++) {
-    const pct = Math.round((i/uploadFiles.length)*100);
-    bar.style.width = pct+'%';
-    stat.textContent = `${i+1}/${uploadFiles.length}  ${uploadFiles[i].name}`;
+    bar.style.width=Math.round((i/uploadFiles.length)*100)+'%';
+    stat.textContent=`${i+1}/${uploadFiles.length}  ${uploadFiles[i].name}`;
     try {
-      const fd = new FormData(); fd.append('file', uploadFiles[i]);
-      let url = '/api/ingest?sync=true';
+      const fd=new FormData(); fd.append('file',uploadFiles[i]);
+      let url='/api/ingest?sync=true';
       if (cid) url+=`&company_id=${encodeURIComponent(cid)}`;
       if (dt)  url+=`&doc_type=${encodeURIComponent(dt)}`;
-      const d = await fetch(url,{method:'POST',body:fd}).then(r=>r.json());
-      if (d.status==='done')    ok++;
-      else if(d.status==='skipped') skip++;
-      else fail++;
+      const d=await fetch(url,{method:'POST',body:fd}).then(r=>r.json());
+      if (d.status==='done') ok++; else if(d.status==='skipped') skip++; else fail++;
     } catch { fail++; }
   }
-
   bar.style.width='100%';
-  stat.textContent = `完成：${ok} 入库 · ${skip} 跳过 · ${fail} 失败`;
+  stat.textContent=`完成：${ok} 入库 · ${skip} 跳过 · ${fail} 失败`;
   toast(`入库完成：${ok} 成功 / ${skip} 跳过 / ${fail} 失败`, ok>0?'success':fail>0?'error':'warning');
   uploadFiles=[]; renderFList();
   btn.disabled=false; btn.innerHTML='⚙️ 处理并入库';
   if (ok>0) { loadOverview(); loadCompaniesData(); }
 });
 
-// ══════════════════════════════════════
-// 目录扫描
-// ══════════════════════════════════════
+// ── 目录扫描 ──────────────────────────────────────────────────────────────
 async function doScan(sync) {
-  const cid = document.getElementById('sc-company').value;
+  const cid=document.getElementById('sc-company').value;
   if (!cid) { toast('请选择企业','warning'); return; }
-  const dt  = document.getElementById('sc-type').value;
-  const log = document.getElementById('slog');
-  const btnA = document.getElementById('sc-async-btn');
-  const btnS = document.getElementById('sc-sync-btn');
-  btnA.disabled = btnS.disabled = true;
+  const dt=document.getElementById('sc-type').value;
+  const log=document.getElementById('slog');
+  const btnA=document.getElementById('sc-async-btn'), btnS=document.getElementById('sc-sync-btn');
+  btnA.disabled=btnS.disabled=true;
   log.classList.add('on');
-  const ts = () => new Date().toLocaleTimeString();
-  log.textContent = `[${ts()}] 开始扫描 uploaded_files/${cid}/ ...\n`;
-
-  let url = `/api/ingest/scan/${encodeURIComponent(cid)}?sync=${sync}`;
-  if (dt) url += `&doc_type=${encodeURIComponent(dt)}`;
-
+  const ts=()=>new Date().toLocaleTimeString();
+  log.textContent=`[${ts()}] 开始扫描 uploaded_files/${cid}/ ...\n`;
+  let url=`/api/ingest/scan/${encodeURIComponent(cid)}?sync=${sync}`;
+  if (dt) url+=`&doc_type=${encodeURIComponent(dt)}`;
   try {
-    const d = await fetch(url,{method:'POST'}).then(r=>r.json());
+    const d=await fetch(url,{method:'POST'}).then(r=>r.json());
     if (sync) {
       (d.results||[]).forEach(x=>{
-        log.textContent += `[${x.status==='done'?'✓':'✗'}] ${x.file}  →  ${x.doc_type}  chunks:${x.chunks??'-'}\n`;
+        log.textContent+=`[${x.status==='done'?'✓':'✗'}] ${x.file}  →  ${x.doc_type}  chunks:${x.chunks??'-'}\n`;
       });
-      log.textContent += `\n[${ts()}] 完成，共 ${d.total} 个文件\n`;
+      log.textContent+=`\n[${ts()}] 完成，共 ${d.total} 个文件\n`;
       toast(`扫描完成：${d.total} 个文件`,'success');
       loadOverview();
     } else {
-      (d.files||[]).forEach(f=>{
-        log.textContent += `[排队] ${f.file}  →  ${f.doc_type}\n`;
-      });
-      log.textContent += `\n[${ts()}] 已提交 ${d.total} 个文件到后台\n`;
+      (d.files||[]).forEach(f=>{ log.textContent+=`[排队] ${f.file}  →  ${f.doc_type}\n`; });
+      log.textContent+=`\n[${ts()}] 已提交 ${d.total} 个文件到后台\n`;
       toast(`已提交 ${d.total} 个文件`,'info');
     }
-    log.scrollTop = log.scrollHeight;
+    log.scrollTop=log.scrollHeight;
   } catch(e) {
-    log.textContent += `\n[错误] ${e.message}\n`;
+    log.textContent+=`\n[错误] ${e.message}\n`;
     toast('扫描失败：'+e.message,'error');
   } finally { btnA.disabled=btnS.disabled=false; }
 }
 
-// ══════════════════════════════════════
-// 清空知识库
-// ══════════════════════════════════════
+// ── 清空知识库 ────────────────────────────────────────────────────────────
 document.getElementById('clear-btn').addEventListener('click', async ()=>{
   if (!confirm('确定清空整个知识库？\n\n将删除所有 Milvus 向量和 SQLite 记录，不可撤销。')) return;
-  const btn = document.getElementById('clear-btn');
+  const btn=document.getElementById('clear-btn');
   btn.disabled=true; btn.innerHTML='<span class="spin">🗑</span> 清空中…';
   try {
-    // 逐个删除企业（级联删除向量和记录）
     for (const c of companies) {
       await fetch(`/api/companies/${c.company_id}`,{method:'DELETE'}).catch(()=>{});
     }
-    // 再调 cleanup 接口删 Milvus 集合（如果有）
     await fetch('/api/collection',{method:'DELETE'}).catch(()=>{});
     toast('知识库已清空','success');
-    await loadCompaniesData();
-    loadOverview();
-    refreshSelects();
+    await loadCompaniesData(); loadOverview(); refreshSelects();
   } catch(e) { toast('清空失败：'+e.message,'error'); }
   finally { btn.disabled=false; btn.innerHTML='🗑 清空整个知识库'; }
 });
 
-// ══════════════════════════════════════
-// 智能问答
-// ══════════════════════════════════════
+// ── 智能问答 ──────────────────────────────────────────────────────────────
 async function doSearch() {
-  const q = document.getElementById('qi').value.trim();
+  const q=document.getElementById('qi').value.trim();
   if (!q) { toast('请输入问题','warning'); return; }
-  const topk = document.getElementById('q-topk').value;
-  const cid  = document.getElementById('q-company').value;
-  const dt   = document.getElementById('q-type').value;
-  const btn  = document.getElementById('qbtn');
+  const topk=document.getElementById('q-topk').value;
+  const cid=document.getElementById('q-company').value;
+  const dt=document.getElementById('q-type').value;
+  const btn=document.getElementById('qbtn');
   btn.disabled=true; btn.innerHTML='<span class="spin">🔍</span> 搜索中…';
-  document.getElementById('results').innerHTML = '<div class="empty"><div class="spin" style="font-size:1.4rem">⚙️</div></div>';
+  document.getElementById('results').innerHTML='<div class="empty"><div class="spin" style="font-size:1.4rem">⚙️</div></div>';
   document.getElementById('answer-card').style.display='none';
-
   try {
-    let url = `/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
+    let url=`/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
     if (cid) url+=`&company_id=${encodeURIComponent(cid)}`;
     if (dt)  url+=`&doc_type=${encodeURIComponent(dt)}`;
-    const r = await fetch(url);
+    const r=await fetch(url);
     if (!r.ok) { const e=await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
-    const data = await r.json();
+    const data=await r.json();
 
-    // 答案
     document.getElementById('answer-card').style.display='block';
-    document.getElementById('q-model').textContent = healthData.llm_model||'Qwen';
-    document.getElementById('answer-body').innerHTML = (data.answer||'').replace(/\[(\d+)\]/g,'<span class="ref">[$1]</span>');
+    document.getElementById('q-model').textContent=healthData.llm_model||'Qwen';
+    document.getElementById('q-reranker').textContent=data.reranker ? '✓ Reranker 精排' : '';
+    document.getElementById('answer-body').innerHTML=(data.answer||'').replace(/\[(\d+)\]/g,'<span style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--accent);background:var(--accent-bg);padding:1px 4px;border-radius:3px">[$1]</span>');
 
-    // 检索结果
-    const hits = data.chunks||[];
+    const hits=data.chunks||[];
     if (!hits.length) {
-      document.getElementById('results').innerHTML = '<div class="empty"><div class="big">🔎</div>未找到相关内容</div>';
+      document.getElementById('results').innerHTML='<div class="empty"><div class="big">🔎</div>未找到相关内容</div>';
     } else {
-      document.getElementById('results').innerHTML = hits.map((h,i)=>`
+      document.getElementById('results').innerHTML=hits.map((h,i)=>`
         <div class="ri">
           <div class="ri-top">
             <div class="ri-num">${i+1}</div>
             <div class="ri-meta">
               ${h.company_id?`<span class="tag tg-document" style="margin-right:5px">🏢 ${h.company_id}</span>`:''}
               <span class="tag tg-${h.doc_type||'unknown'}">${TYPE_LABEL[h.doc_type]||h.doc_type||'未知'}</span>
-              <span style="margin-left:6px;color:var(--ink-soft);font-weight:500">${(h.source||'').split('/').pop()}</span>
+              <span style="margin-left:6px;font-weight:500">${(h.source||'').split('/').pop()}</span>
             </div>
           </div>
           <div class="ri-text">${esc(h.content||'')}</div>
-          <div class="ri-score">相关度 ${((h.score||0)*100).toFixed(1)}%</div>
-        </div>`
-      ).join('');
+          <div class="ri-score">
+            向量相似度 ${((h.score||0)*100).toFixed(1)}%
+            ${h.rerank_score!=null ? ' · Reranker ' + (h.rerank_score*100).toFixed(1)+'%' : ''}
+          </div>
+        </div>`).join('');
     }
   } catch(e) {
     document.getElementById('results').innerHTML=`<div class="empty" style="color:var(--danger)">搜索出错：${e.message}</div>`;
@@ -848,9 +865,7 @@ function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/
 document.getElementById('qbtn').addEventListener('click', doSearch);
 document.getElementById('qi').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey) doSearch(); });
 
-// ══════════════════════════════════════
-// 初始化
-// ══════════════════════════════════════
+// ── 初始化 ────────────────────────────────────────────────────────────────
 (async ()=>{
   await loadCompaniesData();
   loadOverview();

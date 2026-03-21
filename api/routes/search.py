@@ -4,7 +4,7 @@ api/routes/search.py — 搜索 + 问答接口。
 接口
 ----
 GET /api/search   纯向量检索，支持按企业/文件类型过滤
-GET /api/query    向量检索 + LLM 生成答案（固定模板报告）
+GET /api/query    向量检索 + Reranker 精排 + LLM 生成答案
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from config.settings import settings
 from core.dedup import Dedup, DocType
 from core.embedder import Embedder
+from core.reranker import Reranker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["search"])
@@ -31,7 +32,6 @@ def _build_filter(
     doc_type: str | None,
     file_id: str | None,
 ) -> str | None:
-    """将查询参数组合成 Milvus 过滤表达式。"""
     parts = []
     if company_id:
         parts.append(f'company_id == "{company_id}"')
@@ -43,7 +43,7 @@ def _build_filter(
 
 
 # ---------------------------------------------------------------------------
-# GET /api/search — 纯向量检索
+# GET /api/search — 纯向量检索（不经过 Reranker，调试用）
 # ---------------------------------------------------------------------------
 
 @router.get("/search")
@@ -56,14 +56,10 @@ async def search(
     file_id: str | None = Query(None, description="限定单个文件"),
 ):
     """
-    纯向量检索，不经过 LLM，适合调试和前端展示相关段落。
-
-    过滤参数可组合使用，例如：
-        ?company_id=company_001&doc_type=invoice
+    纯向量检索，不经过 Reranker 和 LLM，适合调试和前端展示相关段落。
     """
     logger.info("[Search] q=%r company=%s type=%s", q, company_id, doc_type)
 
-    # 校验 doc_type
     if doc_type and doc_type not in DocType.ALL:
         raise HTTPException(
             status_code=400,
@@ -93,44 +89,51 @@ async def search(
 
 
 # ---------------------------------------------------------------------------
-# GET /api/query — 向量检索 + LLM 生成答案
+# GET /api/query — 向量检索 + Reranker 精排 + LLM 生成答案
 # ---------------------------------------------------------------------------
+
+# 向量粗筛倍数：top_k * RECALL_MULTIPLIER 条送入 Reranker
+_RECALL_MULTIPLIER = 3
+# 向量粗筛阈值（比 /search 放宽，让 Reranker 有更多候选）
+_RECALL_THRESHOLD  = 0.2
 
 @router.get("/query")
 async def query(
     q: str = Query(..., min_length=1, description="问题"),
-    top_k: int = Query(5, ge=1, le=20, description="检索条数"),
-    score_threshold: float = Query(0.3, ge=0.0, le=1.0, description="最低相似度"),
+    top_k: int = Query(5, ge=1, le=20, description="最终返回条数（Reranker 精排后）"),
+    score_threshold: float = Query(0.3, ge=0.0, le=1.0, description="向量检索最低相似度"),
     company_id: str | None = Query(None, description="限定企业范围"),
     doc_type: str | None = Query(None, description="限定文件类型"),
     file_id: str | None = Query(None, description="限定单个文件"),
 ):
     """
-    向量检索 + Qwen 生成带来源标注的答案。
+    向量检索 + Reranker 精排 + Qwen 生成带来源标注的答案。
+
+    流程：
+        1. 向量粗筛：top_k × 3 条候选（阈值放宽到 0.2）
+        2. Reranker 精排：Cross-encoder 打分，保留 top_k 条
+        3. LLM 生成：基于精排结果构建 context，调用 Qwen 生成答案
 
     典型用法：
-        # 针对某企业所有文档问答
         ?q=注册资本是多少&company_id=company_001
-
-        # 只看发票信息
         ?q=2024年发票总金额&company_id=company_001&doc_type=invoice
     """
     logger.info("[Query] q=%r company=%s type=%s", q, company_id, doc_type)
 
     if doc_type and doc_type not in DocType.ALL:
-        raise HTTPException(
-            status_code=400,
-            detail=f"无效的 doc_type: {doc_type}",
-        )
+        raise HTTPException(status_code=400, detail=f"无效的 doc_type: {doc_type}")
 
-    # ── STEP 1: 向量检索 ──────────────────────────────────────────────
-    filter_expr = _build_filter(company_id, doc_type, file_id)
+    # ── STEP 1: 向量粗筛（多召回，给 Reranker 足够候选）──────────────
+    filter_expr  = _build_filter(company_id, doc_type, file_id)
+    recall_top_k = top_k * _RECALL_MULTIPLIER
+    # score_threshold 用接口传入值和内部放宽值的较小值，保证召回量
+    recall_threshold = min(score_threshold, _RECALL_THRESHOLD)
 
     try:
         hits = Embedder.search(
             query=q,
-            top_k=top_k,
-            score_threshold=score_threshold,
+            top_k=recall_top_k,
+            score_threshold=recall_threshold,
             filter_expr=filter_expr,
         )
     except Exception as exc:
@@ -144,20 +147,28 @@ async def query(
             "answer":     "未找到相关内容，请确认文件已入库或放宽过滤条件。",
             "sources":    [],
             "chunks":     [],
+            "reranker":   False,
         })
 
-    # ── STEP 2: 拼装 context（按文件类型分组，更清晰）────────────────
+    logger.info("[Query] 向量粗筛: %d 条候选", len(hits))
+
+    # ── STEP 2: Reranker 精排 ────────────────────────────────────────
+    reranker_used = Reranker.is_available()
+    hits = Reranker.rerank(query=q, hits=hits, top_n=top_k)
+    logger.info("[Query] 精排后: %d 条", len(hits))
+
+    # ── STEP 3: 拼装 context ─────────────────────────────────────────
     context = _build_context(hits)
     logger.debug("[Query] context 长度: %d 字符", len(context))
 
-    # ── STEP 3: 获取企业名称（有 company_id 时加入 prompt）──────────
+    # ── STEP 4: 获取企业名称 ─────────────────────────────────────────
     company_name: str | None = None
     if company_id:
         company = Dedup.get_company(company_id)
         if company:
             company_name = company["name"]
 
-    # ── STEP 4: 调 LLM ────────────────────────────────────────────────
+    # ── STEP 5: 调 LLM ───────────────────────────────────────────────
     answer = await _call_llm(q, context, company_name=company_name)
 
     # ── 来源汇总（去重，按文件归组）──────────────────────────────────
@@ -168,14 +179,16 @@ async def query(
         if src not in seen:
             seen.add(src)
             sources.append({
-                "file":       src.split("/")[-1],
-                "path":       src,
-                "doc_type":   hit.get("doc_type"),
-                "company_id": hit.get("company_id"),
-                "score":      hit["score"],
+                "file":          src.split("/")[-1],
+                "path":          src,
+                "doc_type":      hit.get("doc_type"),
+                "company_id":    hit.get("company_id"),
+                "score":         hit.get("score"),
+                "rerank_score":  hit.get("rerank_score"),
             })
 
-    logger.info("[Query] 答案 %d 字符，来源 %d 个", len(answer), len(sources))
+    logger.info("[Query] 答案 %d 字符，来源 %d 个，reranker=%s",
+                len(answer), len(sources), reranker_used)
 
     return JSONResponse({
         "query":      q,
@@ -183,11 +196,12 @@ async def query(
         "answer":     answer,
         "sources":    sources,
         "chunks":     hits,
+        "reranker":   reranker_used,
     })
 
 
 # ---------------------------------------------------------------------------
-# context 构建（按 doc_type 分组）
+# context 构建（按 doc_type 分组，保留 rerank_score）
 # ---------------------------------------------------------------------------
 
 _DOC_TYPE_LABEL: dict[str, str] = {
@@ -202,10 +216,9 @@ _DOC_TYPE_LABEL: dict[str, str] = {
 
 def _build_context(hits: list[dict]) -> str:
     """
-    将检索结果按文件类型分组拼装成 context 字符串。
-    分组可以帮助 LLM 更清楚地理解不同来源内容的性质。
+    将精排后的结果按 doc_type 分组拼装 context。
+    rerank_score 存在时优先展示，帮助 LLM 理解内容可信度。
     """
-    # 按 doc_type 分组
     groups: dict[str, list[dict]] = {}
     for hit in hits:
         dt = hit.get("doc_type") or DocType.UNKNOWN
@@ -218,8 +231,13 @@ def _build_context(hits: list[dict]) -> str:
         parts.append(f"【{label}】")
         for hit in group_hits:
             source_name = (hit.get("source") or "").split("/")[-1]
+            score_info  = (
+                f"相关度 {hit['rerank_score']:.2f}"
+                if "rerank_score" in hit
+                else f"相似度 {hit.get('score', 0):.2f}"
+            )
             parts.append(
-                f"[{ref_idx}] 来源：{source_name}（相似度 {hit['score']:.2f}）\n"
+                f"[{ref_idx}] 来源：{source_name}（{score_info}）\n"
                 f"{hit['content']}"
             )
             ref_idx += 1
@@ -243,11 +261,10 @@ async def _call_llm(
         raise ImportError("pip install openai") from exc
 
     client = AsyncOpenAI(
-        base_url=settings.llm_api_base or "http://localhost:8002/v1",
+        base_url=settings.llm_api_base or "http://localhost:8000/v1",
         api_key=settings.llm_api_key or "EMPTY",
     )
 
-    # 企业信息加入 system prompt
     company_context = f"当前分析的企业：{company_name}\n" if company_name else ""
 
     system_prompt = (
@@ -281,3 +298,4 @@ async def _call_llm(
     except Exception as exc:
         logger.error("[LLM] 调用失败: %s", exc, exc_info=True)
         return f"（LLM 暂不可用，以下为原始检索内容）\n\n{context[:1500]}"
+        

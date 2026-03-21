@@ -1,448 +1,532 @@
 """
-core/dedup.py — 去重工具类。
+api/routes/ingest.py — 文件上传入库 + 企业管理接口。
 
-数据库表结构
------------
-companies 表：
-    id          TEXT PRIMARY KEY   -- 企业唯一 ID（业务方生成或 UUID）
-    name        TEXT               -- 企业名称
-    created_at  TEXT
+接口
+----
+POST   /api/ingest                         上传单个文件入库
+POST   /api/ingest/scan/{company_id}       扫描企业目录批量入库
+GET    /api/ingest/status/{file_id}        查询入库状态
+GET    /api/files                          已入库文件列表
+DELETE /api/files/{file_id}                删除文件
+PATCH  /api/files/{file_id}/doc_type       人工修改文件类型（带确认标记）
+POST   /api/files/{file_id}/reprocess      重新处理文件（删旧向量→重新解析入库）
 
-files 表：
-    id          TEXT PRIMARY KEY   -- 文件内容 SHA256
-    filename    TEXT
-    file_path   TEXT
-    company_id  TEXT               -- 所属企业 ID（可为空，单文件场景）
-    doc_type    TEXT               -- 文件类型：license/invoice/table/nameplate/document/unknown
-    status      TEXT               -- pending / done / failed
-    created_at  TEXT
-
-chunks 表：
-    id          TEXT PRIMARY KEY   -- chunk 文本 SHA256
-    file_id     TEXT
-    chunk_index INTEGER
-    created_at  TEXT
-
-使用示例
---------
-    from core.dedup import Dedup
-
-    # 登记企业
-    Dedup.register_company("company_001", "澳龙生物科技有限公司")
-
-    # 登记文件（带企业ID和文件类型）
-    file_id = Dedup.register_file(
-        "uploads/营业执照.jpg",
-        company_id="company_001",
-        doc_type="license",
-    )
-
-    # chunk 去重
-    new_chunks, hashes = Dedup.filter_new_chunks(chunks, file_id)
-
-    # 完成
-    Dedup.mark_done(file_id)
+POST   /api/companies                      创建企业
+GET    /api/companies                      企业列表
+GET    /api/companies/{company_id}         企业详情（含文件列表）
+DELETE /api/companies/{company_id}         删除企业及其所有文件
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
-import sqlite3
-from contextlib import contextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
 from config.settings import settings
-from models.document import Document
+from core.dedup import Dedup, DocType
+from core.embedder import Embedder
+from core.tasks import IngestTask
 
 logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api", tags=["ingest"])
+
+_ALLOWED_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif",
+    ".pdf", ".docx", ".pptx",
+    ".xlsx", ".xls", ".csv",
+    ".txt", ".md", ".html", ".htm",
+}
+_MAX_UPLOAD_MB = 50
+
 
 # ---------------------------------------------------------------------------
-# 文件类型常量
+# POST /api/ingest
 # ---------------------------------------------------------------------------
 
-class DocType:
-    LICENSE   = "license"    # 营业执照、证件
-    INVOICE   = "invoice"    # 发票、单据
-    TABLE     = "table"      # 表格、报表
-    NAMEPLATE = "nameplate"  # 设备铭牌、现场照片
-    DOCUMENT  = "document"   # Word/PDF 文档
-    UNKNOWN   = "unknown"    # 未知，兜底
+@router.post("/ingest")
+async def ingest(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    company_id: str | None = None,
+    doc_type: str | None = None,
+    sync: bool = False,
+):
+    if company_id and not Dedup.get_company(company_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"企业不存在: {company_id}，请先通过 POST /api/companies 创建",
+        )
 
-    ALL = {LICENSE, INVOICE, TABLE, NAMEPLATE, DOCUMENT, UNKNOWN}
+    if doc_type is None:
+        doc_type = _guess_doc_type(Path(file.filename or "unknown"))
+        logger.info("[Ingest] 自动推断 doc_type=%s  文件=%s", doc_type, file.filename)
+    elif doc_type not in DocType.ALL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"无效的 doc_type: {doc_type}，可选: {', '.join(sorted(DocType.ALL))}",
+        )
 
-    # 各类型对应 OCR 引擎（给 ImageExtractor 路由用）
-    OCR_ENGINE: dict[str, str] = {
-        LICENSE:   "ppocr",      # PP-OCRv4，CPU 轻量
-        INVOICE:   "ppocr",
-        TABLE:     "ppocr",      # PP-OCRv4 + TableRec
-        NAMEPLATE: "got_ocr",    # GOT-OCR2，复杂场景
-        DOCUMENT:  "ppocr",
-        UNKNOWN:   "got_ocr",    # 不确定走 GOT-OCR2 兜底
+    filename = file.filename or "unknown"
+    ext = Path(filename).suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=415, detail=f"不支持的文件格式: {ext}")
+
+    upload_dir = Path(settings.upload_dir)
+    if company_id:
+        upload_dir = upload_dir / company_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    save_path = upload_dir / filename
+    counter = 1
+    while save_path.exists():
+        save_path = upload_dir / f"{Path(filename).stem}_{counter}{ext}"
+        counter += 1
+
+    content = await file.read()
+    size_mb = len(content) / 1024 / 1024
+    if size_mb > _MAX_UPLOAD_MB:
+        raise HTTPException(status_code=413, detail=f"文件过大: {size_mb:.1f} MB")
+
+    save_path.write_bytes(content)
+
+    file_id = Dedup.hash_file(save_path)
+    if not Dedup.is_file_new(save_path):
+        save_path.unlink(missing_ok=True)
+        existing = Dedup.get_file(file_id) or {}
+        return JSONResponse({
+            "status":     "skipped",
+            "reason":     "文件内容已入库",
+            "file_id":    file_id,
+            "file":       existing.get("filename", filename),
+            "company_id": existing.get("company_id"),
+            "doc_type":   existing.get("doc_type"),
+        })
+
+    kwargs = dict(company_id=company_id, doc_type=doc_type)
+    if sync:
+        result = IngestTask.run(str(save_path), **kwargs)
+        return JSONResponse(result)
+    else:
+        background_tasks.add_task(IngestTask.run, str(save_path), **kwargs)
+        return JSONResponse({
+            "status":     "processing",
+            "file_id":    file_id,
+            "file":       save_path.name,
+            "company_id": company_id,
+            "doc_type":   doc_type,
+            "message":    "文件已上传，正在后台处理",
+        }, status_code=202)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/ingest/scan/{company_id}
+# ---------------------------------------------------------------------------
+
+_SCAN_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif",
+    ".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".csv",
+    ".txt", ".md", ".html", ".htm",
+}
+_SKIP_FILES    = {".DS_Store", "Thumbs.db", ".gitkeep"}
+_SKIP_SUFFIXES = {".dwg", ".dxf", ".ds_store"}
+
+_PATH_RULES: list[tuple[list[str], str]] = [
+    (["营业执照", "执照", "license", "证照", "信用中国"],                        "license"),
+    (["排污许可", "许可证"],                                                      "license"),
+    (["现场照片", "铭牌", "nameplate", "设备铭牌"],                               "nameplate"),
+    (["微信图片", "现场"],                                                         "nameplate"),
+    (["统计表", "汇总", "台账", "明细", "一览表", "固废处理统计", "废水废气"],    "table"),
+    (["水电气", "生产设备"],                                                       "table"),
+    (["检测报告", "监测报告", "废气", "废水", "噪音", "环境影响", "环评",
+      "排污", "验收", "竣工", "锅炉", "分析报告"],                               "document"),
+    (["认证", "证书", "资质", "许可", "批准书", "许可证"],                        "document"),
+    (["合同", "协议", "制度", "规程", "工艺"],                                     "document"),
+    (["总平面图", "平面图", "报告书", "报告"],                                      "document"),
+    (["收资清单", "评估报告", "诊断报告", "GMP", "AL-SMP"],                       "document"),
+    (["危废", "固废", "废品", "污水"],                                             "document"),
+    (["发票", "invoice", "单据", "收据"],                                          "invoice"),
+]
+
+
+def _guess_doc_type(file_path: Path) -> str:
+    path_str = "/".join(file_path.parts).lower()
+    for keywords, dt in _PATH_RULES:
+        if any(k.lower() in path_str for k in keywords):
+            return dt
+    suffix = file_path.suffix.lower()
+    if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif"}:
+        return "nameplate"
+    return "document"
+
+
+def _prepare_doc(file_path: Path) -> Path | None:
+    suffix = file_path.suffix.lower()
+    if suffix in _SKIP_SUFFIXES:
+        return None
+    if suffix == ".doc":
+        docx_path = file_path.with_suffix(".docx")
+        if docx_path.exists():
+            return None
+        return file_path
+    return file_path
+
+
+@router.post("/ingest/scan/{company_id}")
+async def scan_company_dir(
+    company_id: str,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    doc_type: str | None = None,
+    sync: bool = False,
+):
+    if not Dedup.get_company(company_id):
+        raise HTTPException(status_code=404, detail=f"企业不存在: {company_id}")
+
+    scan_dir = Path(settings.upload_dir) / company_id
+    if not scan_dir.exists():
+        raise HTTPException(status_code=404, detail=f"目录不存在: {scan_dir}")
+
+    all_files: list[Path] = []
+    for f in scan_dir.rglob("*"):
+        if not f.is_file():
+            continue
+        if f.name in _SKIP_FILES:
+            continue
+        if f.suffix.lower() in _SKIP_SUFFIXES:
+            continue
+        prepared = _prepare_doc(f)
+        if prepared is None:
+            continue
+        supported = _SCAN_EXTENSIONS | {".doc", ".docm"}
+        if f.suffix.lower() not in supported:
+            continue
+        all_files.append(prepared)
+
+    if not all_files:
+        return JSONResponse({
+            "status": "empty", "company_id": company_id,
+            "scan_dir": str(scan_dir), "message": "目录下没有找到支持的文件",
+        })
+
+    tasks: list[dict] = []
+    for f in all_files:
+        dt = doc_type or _guess_doc_type(f)
+        tasks.append({"path": str(f), "doc_type": dt})
+
+    if sync:
+        results = []
+        for task in tasks:
+            result = IngestTask.run(task["path"], company_id=company_id, doc_type=task["doc_type"])
+            results.append({
+                "file":     Path(task["path"]).name,
+                "doc_type": task["doc_type"],
+                "status":   result.get("status"),
+                "chunks":   result.get("new_chunks", 0),
+            })
+        return JSONResponse({"status": "done", "company_id": company_id,
+                             "total": len(tasks), "results": results})
+    else:
+        for task in tasks:
+            background_tasks.add_task(IngestTask.run, task["path"],
+                                      company_id=company_id, doc_type=task["doc_type"])
+        return JSONResponse({
+            "status": "processing", "company_id": company_id, "total": len(tasks),
+            "files": [{"file": Path(t["path"]).name, "doc_type": t["doc_type"]} for t in tasks],
+            "message": f"已提交 {len(tasks)} 个文件到后台处理",
+        }, status_code=202)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/ingest/status/{file_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/ingest/status/{file_id}")
+async def ingest_status(file_id: str):
+    record = Dedup.get_file(file_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    resp = {
+        "file_id":             record["id"],
+        "filename":            record["filename"],
+        "company_id":          record["company_id"],
+        "doc_type":            record["doc_type"],
+        "doc_type_confirmed":  bool(record.get("doc_type_confirmed", 0)),
+        "status":              record["status"],
+        "created_at":          record["created_at"],
     }
+    if record["status"] == "done":
+        try:
+            resp["total_vectors"] = Embedder.count()
+        except Exception:
+            pass
+    return JSONResponse(resp)
 
 
 # ---------------------------------------------------------------------------
-# 模块级数据库单例
+# GET /api/files
 # ---------------------------------------------------------------------------
 
-_initialized: bool = False
+@router.get("/files")
+async def list_files(
+    status: str | None = None,
+    company_id: str | None = None,
+    doc_type: str | None = None,
+):
+    files = Dedup.list_files(status=status, company_id=company_id, doc_type=doc_type)
+    return JSONResponse({
+        "total": len(files),
+        "files": [
+            {
+                "file_id":            f["id"][:16] + "..",
+                "filename":           f["filename"],
+                "company_id":         f["company_id"],
+                "doc_type":           f["doc_type"],
+                "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
+                "status":             f["status"],
+                "created_at":         f["created_at"],
+            }
+            for f in files
+        ],
+    })
 
 
-def _get_db_path() -> str:
-    return settings.db_path
+# ---------------------------------------------------------------------------
+# DELETE /api/files/{file_id}
+# ---------------------------------------------------------------------------
 
-
-def _ensure_init() -> None:
-    """建表（幂等，重复调用安全）。"""
-    global _initialized
-    if _initialized:
-        return
-    with _conn() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS companies (
-                id          TEXT PRIMARY KEY,
-                name        TEXT NOT NULL,
-                created_at  TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS files (
-                id          TEXT PRIMARY KEY,
-                filename    TEXT NOT NULL,
-                file_path   TEXT NOT NULL,
-                company_id  TEXT,
-                doc_type    TEXT NOT NULL DEFAULT 'unknown',
-                status      TEXT NOT NULL DEFAULT 'pending',
-                created_at  TEXT NOT NULL,
-                FOREIGN KEY (company_id) REFERENCES companies(id)
-            );
-
-            CREATE TABLE IF NOT EXISTS chunks (
-                id          TEXT PRIMARY KEY,
-                file_id     TEXT NOT NULL,
-                chunk_index INTEGER NOT NULL,
-                created_at  TEXT NOT NULL,
-                FOREIGN KEY (file_id) REFERENCES files(id)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_files_company_id ON files(company_id);
-            CREATE INDEX IF NOT EXISTS idx_files_doc_type   ON files(doc_type);
-            CREATE INDEX IF NOT EXISTS idx_chunks_file_id   ON chunks(file_id);
-        """)
-    _initialized = True
-    logger.debug("[Dedup] 初始化完成: %s", _get_db_path())
-
-
-@contextmanager
-def _conn():
-    conn = sqlite3.connect(_get_db_path(), check_same_thread=False)
-    conn.row_factory = sqlite3.Row
+@router.delete("/files/{file_id}")
+async def delete_file(file_id: str):
+    record = Dedup.get_file(file_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="文件不存在")
     try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+        Embedder.delete_by_file(file_id)
+    except Exception as e:
+        logger.warning("[Ingest] Milvus 删除失败: %s", e)
+    Dedup.delete_file(file_id)
+    return JSONResponse({"status": "deleted", "file_id": file_id, "filename": record["filename"]})
 
 
 # ---------------------------------------------------------------------------
-# 工具类
+# PATCH /api/files/{file_id}/doc_type — 人工修改文件类型
 # ---------------------------------------------------------------------------
 
-class Dedup:
+class DocTypeUpdate(BaseModel):
+    doc_type: str
+    confirmed: bool = True
+
+
+@router.patch("/files/{file_id}/doc_type")
+async def update_doc_type(file_id: str, body: DocTypeUpdate):
     """
-    去重工具类，所有方法均为类方法，无需实例化。
+    人工修改文件的 doc_type，并标记为已确认。
 
-    完整链路：
-        Dedup.register_company(company_id, name)
-        file_id = Dedup.register_file(path, company_id=..., doc_type=...)
-        new_chunks, hashes = Dedup.filter_new_chunks(chunks, file_id)
-        # ... 向量化入库 ...
-        Dedup.mark_done(file_id)
+    注意：修改 doc_type 后需要手动触发 reprocess 才能用新类型重新解析。
     """
-
-    # ------------------------------------------------------------------
-    #  Hash
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def hash_file(file_path: str | Path) -> str:
-        """文件内容 SHA256（分块读取，大文件安全）。"""
-        sha256 = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                sha256.update(chunk)
-        return sha256.hexdigest()
-
-    @staticmethod
-    def hash_text(text: str) -> str:
-        """文本内容 SHA256。"""
-        return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-    # ------------------------------------------------------------------
-    #  企业管理
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def register_company(cls, company_id: str, name: str) -> None:
-        """
-        登记企业（幂等，已存在则更新名称）。
-
-        Parameters
-        ----------
-        company_id : 业务方定义的企业唯一 ID（如统一社会信用代码或自定义 ID）
-        name       : 企业名称
-        """
-        _ensure_init()
-        now = datetime.now(timezone.utc).isoformat()
-        with _conn() as conn:
-            conn.execute(
-                """
-                INSERT INTO companies (id, name, created_at) VALUES (?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET name = excluded.name
-                """,
-                (company_id, name, now),
-            )
-        logger.info("[Dedup] 登记企业: %s (%s)", name, company_id)
-
-    @classmethod
-    def get_company(cls, company_id: str) -> dict | None:
-        _ensure_init()
-        with _conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM companies WHERE id = ?", (company_id,)
-            ).fetchone()
-        return dict(row) if row else None
-
-    @classmethod
-    def list_companies(cls) -> list[dict]:
-        _ensure_init()
-        with _conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM companies ORDER BY created_at DESC"
-            ).fetchall()
-        return [dict(r) for r in rows]
-
-    # ------------------------------------------------------------------
-    #  文件级去重
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def is_file_new(cls, file_path: str | Path) -> bool:
-        """
-        True  → 未入库或上次失败，需要处理。
-        False → 已成功完成，可跳过。
-        """
-        _ensure_init()
-        file_id = cls.hash_file(file_path)
-        with _conn() as conn:
-            row = conn.execute(
-                "SELECT status FROM files WHERE id = ?", (file_id,)
-            ).fetchone()
-        if row is None:
-            return True
-        return row["status"] != "done"
-
-    @classmethod
-    def register_file(
-        cls,
-        file_path: str | Path,
-        filename: str | None = None,
-        company_id: str | None = None,
-        doc_type: str = DocType.UNKNOWN,
-    ) -> str:
-        """
-        登记文件，返回 file_id（SHA256）。
-        已存在时重置为 pending（支持重试）。
-
-        Parameters
-        ----------
-        file_path  : 磁盘路径
-        filename   : 显示文件名（None 时取 path.name）
-        company_id : 所属企业 ID（可为 None）
-        doc_type   : 文件类型，见 DocType 常量
-        """
-        _ensure_init()
-        path = Path(file_path)
-        file_id = cls.hash_file(path)
-        fname = filename or path.name
-        dt = doc_type if doc_type in DocType.ALL else DocType.UNKNOWN
-        now = datetime.now(timezone.utc).isoformat()
-
-        with _conn() as conn:
-            conn.execute(
-                """
-                INSERT INTO files (id, filename, file_path, company_id, doc_type, status, created_at)
-                VALUES (?, ?, ?, ?, ?, 'pending', ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    status     = 'pending',
-                    file_path  = excluded.file_path,
-                    filename   = excluded.filename,
-                    company_id = excluded.company_id,
-                    doc_type   = excluded.doc_type
-                """,
-                (file_id, fname, str(path), company_id, dt, now),
-            )
-        logger.info(
-            "[Dedup] 登记文件: %s  company=%s  type=%s  id=%s",
-            fname, company_id, dt, file_id[:12],
+    if body.doc_type not in DocType.ALL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"无效的 doc_type: {body.doc_type}，可选: {', '.join(sorted(DocType.ALL))}",
         )
-        return file_id
 
-    @classmethod
-    def mark_done(cls, file_id: str) -> None:
-        _ensure_init()
-        with _conn() as conn:
-            conn.execute(
-                "UPDATE files SET status = 'done' WHERE id = ?", (file_id,)
-            )
-        logger.info("[Dedup] 文件完成: id=%s", file_id[:12])
+    # 支持前缀匹配（file_id 可能是截断的）
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]
+            file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件，请提供完整 id")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
 
-    @classmethod
-    def mark_failed(cls, file_id: str) -> None:
-        _ensure_init()
-        with _conn() as conn:
-            conn.execute(
-                "UPDATE files SET status = 'failed' WHERE id = ?", (file_id,)
-            )
-        logger.warning("[Dedup] 文件失败: id=%s", file_id[:12])
+    old_type = record["doc_type"]
+    success = Dedup.update_doc_type(file_id, body.doc_type, confirmed=body.confirmed)
+    if not success:
+        raise HTTPException(status_code=404, detail="文件不存在")
 
-    # ------------------------------------------------------------------
-    #  Chunk 级去重
-    # ------------------------------------------------------------------
+    logger.info("[Ingest] 人工修改 doc_type: %s → %s  file=%s",
+                old_type, body.doc_type, record["filename"])
 
-    @classmethod
-    def filter_new_chunks(
-        cls,
-        chunks: list[Document],
-        file_id: str,
-    ) -> tuple[list[Document], list[str]]:
-        """过滤已入库 chunk，返回 (新chunk列表, 对应hash列表)。"""
-        _ensure_init()
-        new_chunks: list[Document] = []
-        new_hashes: list[str] = []
+    return JSONResponse({
+        "status":             "updated",
+        "file_id":            file_id,
+        "filename":           record["filename"],
+        "doc_type_old":       old_type,
+        "doc_type_new":       body.doc_type,
+        "doc_type_confirmed": body.confirmed,
+        "message":            "doc_type 已更新，如需重新解析请调用 reprocess 接口",
+    })
 
-        for chunk in chunks:
-            h = cls.hash_text(chunk.page_content)
-            with _conn() as conn:
-                exists = conn.execute(
-                    "SELECT 1 FROM chunks WHERE id = ?", (h,)
-                ).fetchone()
-            if not exists:
-                new_chunks.append(chunk)
-                new_hashes.append(h)
-            else:
-                logger.debug("[Dedup] chunk 已存在，跳过: %s", h[:12])
 
-        logger.info(
-            "[Dedup] chunk 去重: 共 %d，跳过 %d，新增 %d",
-            len(chunks), len(chunks) - len(new_chunks), len(new_chunks),
+# ---------------------------------------------------------------------------
+# POST /api/files/{file_id}/reprocess — 重新处理文件
+# ---------------------------------------------------------------------------
+
+@router.post("/files/{file_id}/reprocess")
+async def reprocess_file(
+    file_id: str,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    sync: bool = False,
+):
+    """
+    重新处理文件：删除旧向量和 chunk 记录，用当前 doc_type 重新解析入库。
+
+    流程（方案A）：
+        1. 删除 Milvus 中该文件的全部向量
+        2. 删除 SQLite 中该文件的全部 chunk 记录
+        3. 重置文件状态为 pending
+        4. 用当前 doc_type（含人工确认值）重新触发完整入库流水线
+
+    适用场景：
+        - 人工修改 doc_type 后希望用新类型重新解析
+        - 文件解析失败后重试
+        - OCR 结果不满意，切换后端后重新处理
+    """
+    # 支持前缀匹配
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]
+            file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    file_path = Path(record["file_path"])
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"原始文件不存在: {file_path}，无法重新处理",
         )
-        return new_chunks, new_hashes
 
-    @classmethod
-    def register_chunks(
-        cls,
-        chunk_records: list[tuple[str, str, int]],
-    ) -> None:
-        """批量登记 chunk。chunk_records: [(chunk_hash, file_id, chunk_index), ...]"""
-        _ensure_init()
-        now = datetime.now(timezone.utc).isoformat()
-        rows = [(h, fid, idx, now) for h, fid, idx in chunk_records]
-        with _conn() as conn:
-            conn.executemany(
-                "INSERT OR IGNORE INTO chunks (id, file_id, chunk_index, created_at) VALUES (?, ?, ?, ?)",
-                rows,
-            )
-        logger.debug("[Dedup] 登记 %d 个 chunk", len(rows))
+    logger.info("[Reprocess] 开始重新处理: %s  doc_type=%s  confirmed=%s",
+                record["filename"], record["doc_type"],
+                bool(record.get("doc_type_confirmed", 0)))
 
-    # ------------------------------------------------------------------
-    #  查询
-    # ------------------------------------------------------------------
+    # ── STEP 1: 删除旧向量（Milvus）──────────────────────────────────
+    try:
+        Embedder.delete_by_file(file_id)
+        logger.info("[Reprocess] 旧向量已删除: file_id=%s", file_id[:12])
+    except Exception as e:
+        logger.warning("[Reprocess] Milvus 删除失败（继续处理）: %s", e)
 
-    @classmethod
-    def get_file(cls, file_id: str) -> dict | None:
-        _ensure_init()
-        with _conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM files WHERE id = ?", (file_id,)
-            ).fetchone()
-        return dict(row) if row else None
+    # ── STEP 2: 删除旧 chunk 记录（SQLite）───────────────────────────
+    deleted_chunks = Dedup.delete_chunks_by_file(file_id)
+    logger.info("[Reprocess] 旧 chunk 记录已删除: %d 条", deleted_chunks)
 
-    @classmethod
-    def list_files(
-        cls,
-        status: str | None = None,
-        company_id: str | None = None,
-        doc_type: str | None = None,
-    ) -> list[dict]:
-        """列出文件，支持按状态、企业、类型过滤。"""
-        _ensure_init()
-        conditions = []
-        params = []
-        if status:
-            conditions.append("status = ?")
-            params.append(status)
-        if company_id:
-            conditions.append("company_id = ?")
-            params.append(company_id)
-        if doc_type:
-            conditions.append("doc_type = ?")
-            params.append(doc_type)
+    # ── STEP 3: 重置文件状态，保留 doc_type 和 confirmed 标记 ────────
+    with Dedup._get_conn_ctx() as conn:
+        conn.execute(
+            "UPDATE files SET status = 'pending' WHERE id = ?", (file_id,)
+        )
 
-        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
-        with _conn() as conn:
-            rows = conn.execute(
-                f"SELECT * FROM files {where} ORDER BY created_at DESC", params
-            ).fetchall()
-        return [dict(r) for r in rows]
+    # ── STEP 4: 触发重新入库（force=True 跳过文件级去重）────────────
+    kwargs = dict(
+        company_id=record["company_id"],
+        doc_type=record["doc_type"],
+        force=True,
+    )
 
-    @classmethod
-    def delete_file(cls, file_id: str) -> None:
-        """删除文件及其 chunk 记录。"""
-        _ensure_init()
-        with _conn() as conn:
-            conn.execute("DELETE FROM chunks WHERE file_id = ?", (file_id,))
-            conn.execute("DELETE FROM files WHERE id = ?", (file_id,))
-        logger.info("[Dedup] 删除记录: id=%s", file_id[:12])
+    if sync:
+        result = IngestTask.run(str(file_path), **kwargs)
+        return JSONResponse({
+            **result,
+            "reprocessed":        True,
+            "deleted_chunks":     deleted_chunks,
+            "doc_type_confirmed": bool(record.get("doc_type_confirmed", 0)),
+        })
+    else:
+        background_tasks.add_task(IngestTask.run, str(file_path), **kwargs)
+        return JSONResponse({
+            "status":             "processing",
+            "file_id":            file_id,
+            "filename":           record["filename"],
+            "doc_type":           record["doc_type"],
+            "doc_type_confirmed": bool(record.get("doc_type_confirmed", 0)),
+            "deleted_chunks":     deleted_chunks,
+            "reprocessed":        True,
+            "message":            "已清除旧数据，正在后台重新处理",
+        }, status_code=202)
 
-    @classmethod
-    def delete_company(cls, company_id: str) -> int:
-        """
-        删除企业及其所有文件记录（Milvus 向量需另外清理）。
-        返回删除的文件数。
-        """
-        _ensure_init()
-        files = cls.list_files(company_id=company_id)
-        for f in files:
-            cls.delete_file(f["id"])
-        with _conn() as conn:
-            conn.execute("DELETE FROM companies WHERE id = ?", (company_id,))
-        logger.info("[Dedup] 删除企业: %s，共 %d 个文件", company_id, len(files))
-        return len(files)
 
-    @classmethod
-    def stats(cls) -> dict:
-        _ensure_init()
-        with _conn() as conn:
-            total_companies = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
-            total_files     = conn.execute("SELECT COUNT(*) FROM files").fetchone()[0]
-            done_files      = conn.execute("SELECT COUNT(*) FROM files WHERE status='done'").fetchone()[0]
-            failed_files    = conn.execute("SELECT COUNT(*) FROM files WHERE status='failed'").fetchone()[0]
-            total_chunks    = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-            # 按类型统计
-            type_rows = conn.execute(
-                "SELECT doc_type, COUNT(*) as cnt FROM files GROUP BY doc_type"
-            ).fetchall()
-        return {
-            "total_companies": total_companies,
-            "total_files":     total_files,
-            "done_files":      done_files,
-            "failed_files":    failed_files,
-            "total_chunks":    total_chunks,
-            "by_doc_type":     {r["doc_type"]: r["cnt"] for r in type_rows},
-        }
-        
+# ---------------------------------------------------------------------------
+# 企业管理
+# ---------------------------------------------------------------------------
+
+class CompanyCreate(BaseModel):
+    company_id: str
+    name: str
+
+
+@router.post("/companies", status_code=201)
+async def create_company(body: CompanyCreate):
+    Dedup.register_company(body.company_id, body.name)
+    return JSONResponse({
+        "status": "ok", "company_id": body.company_id, "name": body.name,
+    }, status_code=201)
+
+
+@router.get("/companies")
+async def list_companies():
+    companies = Dedup.list_companies()
+    result = []
+    for c in companies:
+        files = Dedup.list_files(company_id=c["id"])
+        result.append({
+            "company_id":       c["id"],
+            "name":             c["name"],
+            "created_at":       c["created_at"],
+            "file_count":       len(files),
+            "done_count":       sum(1 for f in files if f["status"] == "done"),
+            "confirmed_count":  sum(1 for f in files if f.get("doc_type_confirmed")),
+        })
+    return JSONResponse({"total": len(result), "companies": result})
+
+
+@router.get("/companies/{company_id}")
+async def get_company(company_id: str):
+    company = Dedup.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    files = Dedup.list_files(company_id=company_id)
+    return JSONResponse({
+        "company_id": company["id"],
+        "name":       company["name"],
+        "created_at": company["created_at"],
+        "files": [
+            {
+                "file_id":            f["id"],
+                "filename":           f["filename"],
+                "doc_type":           f["doc_type"],
+                "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
+                "status":             f["status"],
+            }
+            for f in files
+        ],
+    })
+
+
+@router.delete("/companies/{company_id}")
+async def delete_company(company_id: str):
+    company = Dedup.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    files = Dedup.list_files(company_id=company_id)
+    for f in files:
+        try:
+            Embedder.delete_by_file(f["id"])
+        except Exception as e:
+            logger.warning("[Ingest] Milvus 删除失败: %s", e)
+    deleted = Dedup.delete_company(company_id)
+    return JSONResponse({
+        "status": "deleted", "company_id": company_id,
+        "name": company["name"], "files_deleted": deleted,
+    })

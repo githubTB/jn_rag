@@ -3,7 +3,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="ssh_jn_46d26532ccc1acbb66d9dd8a160c27a683e925f93fd2b3ffc7516e00c493a96a",
-    base_url="http://117.157.162.55:8002/v1"  # 换成你的实际地址
+    base_url="http://117.157.162.135:8000/v1"  # 换成你的实际地址
 )
 
 start_time = time.time()
@@ -54,7 +54,7 @@ prompt = """
 """
 
 response = client.chat.completions.create(
-    model="Qwen3.5-27B",
+    model="any",
     messages=[
         {"role": "system", "content": "你是一个专业的工业企业绿色生产水平评估专家，擅长计算企业建筑容积率、建筑密度，根据《工业项目建设用地控制指标》（2023版）对企业用地集约化进行潜力分析。区域是中国重庆"},
         {"role": "user", "content": prompt}
