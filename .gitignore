@@ -6,9 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+# Tests
+tests/
+
 # Distribution / packaging
 .idea/
-tests/
 .Python
 venv/
 venv_old/
