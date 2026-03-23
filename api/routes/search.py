@@ -214,10 +214,15 @@ _DOC_TYPE_LABEL: dict[str, str] = {
 }
 
 
+# 替换 search.py 里的 _build_context 函数
+
 def _build_context(hits: list[dict]) -> str:
     """
     将精排后的结果按 doc_type 分组拼装 context。
-    rerank_score 存在时优先展示，帮助 LLM 理解内容可信度。
+
+    表格类型（label=table 或 doc_type=table）优先使用 raw_content
+    保留原始格式（HTML/Markdown），让 LLM 能看到完整表格结构。
+    其他类型使用 content（纯文本）。
     """
     groups: dict[str, list[dict]] = {}
     for hit in hits:
@@ -236,9 +241,18 @@ def _build_context(hits: list[dict]) -> str:
                 if "rerank_score" in hit
                 else f"相似度 {hit.get('score', 0):.2f}"
             )
+
+            # 表格类型用 raw_content 保留格式，其他用 content 纯文本
+            is_table = (
+                dt == DocType.TABLE
+                or hit.get("label") in ("table", "ocr")
+                and hit.get("raw_content", "") != hit.get("content", "")
+            )
+            body = hit.get("raw_content") or hit.get("content", "") if is_table \
+                else hit.get("content", "")
+
             parts.append(
-                f"[{ref_idx}] 来源：{source_name}（{score_info}）\n"
-                f"{hit['content']}"
+                f"[{ref_idx}] 来源：{source_name}（{score_info}）\n{body}"
             )
             ref_idx += 1
 

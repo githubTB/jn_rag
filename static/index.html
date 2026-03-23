@@ -36,10 +36,9 @@ nav{display:flex;gap:2px}
 .ch{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-weight:600;font-size:0.87rem}
 .ch .ic{color:var(--accent);font-size:0.95rem}
 .cb{padding:18px}
-.g2{display:grid;grid-template-columns:290px 1fr;gap:18px;align-items:start}
-.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-@media(max-width:860px){.g2{grid-template-columns:1fr}.g3,.g4{grid-template-columns:1fr 1fr}}
+@media(max-width:860px){.g2{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
 .stat-v{font-size:1.9rem;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace;line-height:1}
 .stat-l{font-size:0.77rem;color:var(--ink-muted);margin-top:6px}
@@ -56,12 +55,11 @@ nav{display:flex;gap:2px}
 .btn-sm{padding:5px 10px;font-size:0.77rem}
 .btn-fw{width:100%}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
-.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
 .fl{font-size:0.73rem;color:var(--ink-muted);font-weight:500}
 .fi{border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:0.82rem;outline:none;transition:border-color .2s;background:var(--paper);color:var(--ink);font-family:inherit;width:100%}
 .fi:focus{border-color:var(--accent)}
-select.fi{cursor:pointer}
-.dz{border:2px dashed var(--border);border-radius:8px;padding:26px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--paper)}
+.dz{border:2px dashed var(--border);border-radius:8px;padding:32px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--paper)}
 .dz:hover,.dz.over{border-color:var(--accent);background:var(--accent-bg)}
 .dz input{display:none}
 .tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:0.69rem;font-weight:600;line-height:1.6}
@@ -85,19 +83,13 @@ select.fi{cursor:pointer}
 .cc-stats{display:flex;gap:14px}
 .cc-stat-v{font-size:1.05rem;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace}
 .cc-stat-l{font-size:0.67rem;color:var(--ink-muted)}
-
-/* 文件行 - 新增操作列 */
 .frow{display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;transition:background .12s;border:1px solid transparent}
 .frow:hover{background:var(--paper);border-color:var(--border)}
 .frow+.frow{margin-top:4px}
 .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft);font-size:0.82rem}
 .frow-actions{display:flex;align-items:center;gap:6px}
-
-/* doc_type 下拉选择器 */
 .dt-select{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:0.75rem;background:var(--paper);color:var(--ink);outline:none;font-family:inherit;cursor:pointer;transition:border-color .15s}
-.dt-select:focus{border-color:var(--accent)}
 .dt-select.changed{border-color:var(--warn);background:#fffbeb}
-
 .sbar{display:flex;gap:10px}
 .sbar input{flex:1;border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;font-size:0.92rem;outline:none;transition:border-color .2s;background:var(--surface);font-family:inherit}
 .sbar input:focus{border-color:var(--accent)}
@@ -106,21 +98,21 @@ select.fi{cursor:pointer}
 .ah{display:flex;align-items:center;gap:8px;padding:11px 18px;border-bottom:1px solid var(--border)}
 .mbadge{font-family:'JetBrains Mono',monospace;font-size:0.69rem;padding:2px 7px;background:var(--accent-bg);color:var(--accent);border-radius:4px;border:1px solid rgba(92,107,192,.18)}
 #answer-body{padding:18px;font-size:0.9rem;line-height:1.8;white-space:pre-wrap}
-.ri{border:1px solid var(--border);border-radius:9px;padding:12px 14px;transition:box-shadow .18s,border-color .18s;background:var(--surface);margin-bottom:9px}
+.ri{border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:9px;background:var(--surface)}
 .ri:hover{box-shadow:var(--shadow);border-color:rgba(92,107,192,.28)}
 .ri-top{display:flex;align-items:flex-start;gap:9px;margin-bottom:7px}
 .ri-num{width:23px;height:23px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:0.74rem;font-weight:700;display:grid;place-items:center;flex-shrink:0}
 .ri-meta{font-size:0.75rem;color:var(--ink-muted);line-height:1.6}
 .ri-text{font-size:0.8rem;color:var(--ink-soft);line-height:1.7;max-height:88px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .ri-score{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--ink-muted);margin-top:5px}
-.slog{background:#1a1a2e;color:#a8d8a8;border-radius:8px;padding:13px;font-family:'JetBrains Mono',monospace;font-size:0.76rem;line-height:1.7;max-height:220px;overflow-y:auto;margin-top:12px;display:none}
+.slog{background:#1a1a2e;color:#a8d8a8;border-radius:8px;padding:13px;font-family:'JetBrains Mono',monospace;font-size:0.76rem;line-height:1.7;max-height:260px;overflow-y:auto;margin-top:12px;display:none}
 .slog.on{display:block}
-.prog{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:8px;display:none}
+.prog{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px;display:none}
 .prog.on{display:block}
-.prog-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+.prog-bar{height:100%;background:var(--accent);border-radius:3px;transition:width .3s}
 .modal{display:none;position:fixed;inset:0;background:rgba(26,26,46,.42);z-index:300;place-items:center}
 .modal.open{display:grid}
-.mbox{background:var(--surface);border-radius:var(--radius);padding:24px;min-width:340px;max-width:500px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.18);position:relative}
+.mbox{background:var(--surface);border-radius:var(--radius);padding:24px;min-width:340px;max-width:520px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.18);position:relative}
 .mtitle{font-weight:700;font-size:0.97rem;margin-bottom:16px}
 .mclose{position:absolute;top:13px;right:13px;background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--ink-muted)}
 #toast{position:fixed;bottom:22px;right:22px;padding:10px 16px;border-radius:10px;font-size:0.83rem;font-weight:500;max-width:340px;box-shadow:0 4px 18px rgba(0,0,0,.14);transform:translateY(70px);opacity:0;transition:all .28s cubic-bezier(.34,1.56,.64,1);z-index:999;pointer-events:none}
@@ -144,9 +136,18 @@ select.fi{cursor:pointer}
 .ok{color:var(--success);font-weight:600}
 .fail{color:var(--danger);font-weight:600}
 
-/* 重处理状态指示 */
-.reprocess-btn{transition:all .2s}
-.reprocess-btn.processing{opacity:.6;pointer-events:none}
+/* 文件夹上传 */
+.folder-dz{border:2px dashed var(--accent);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--accent-bg)}
+.folder-dz:hover{background:rgba(92,107,192,0.12)}
+.folder-dz input{display:none}
+.upload-file-list{max-height:200px;overflow-y:auto;margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:8px}
+.upload-file-item{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:0.77rem;color:var(--ink-soft);border-radius:4px}
+.upload-file-item:hover{background:var(--paper)}
+.upload-file-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--ink-muted)}
+.step-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:0.72rem;font-weight:700;flex-shrink:0}
+.step-badge.done{background:var(--success)}
+.step-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px}
+.step-content{flex:1}
 </style>
 </head>
 <body>
@@ -158,7 +159,6 @@ select.fi{cursor:pointer}
   <nav>
     <button class="nav-btn active" data-view="overview"  onclick="switchView('overview')">概览</button>
     <button class="nav-btn"        data-view="companies" onclick="switchView('companies')">企业管理</button>
-    <button class="nav-btn"        data-view="ingest"    onclick="switchView('ingest')">文件入库</button>
     <button class="nav-btn"        data-view="query"     onclick="switchView('query')">智能问答</button>
   </nav>
   <div id="health-pill" onclick="showHealth()">
@@ -174,7 +174,7 @@ select.fi{cursor:pointer}
   <div class="g4" style="margin-bottom:18px">
     <div class="stat"><div class="stat-v" id="sv-companies">-</div><div class="stat-l">企业数量</div></div>
     <div class="stat"><div class="stat-v" id="sv-files">-</div><div class="stat-l">已入库文件</div><div class="stat-s" id="sv-files-s"></div></div>
-    <div class="stat"><div class="stat-v" id="sv-confirmed">-</div><div class="stat-l">人工已确认</div><div class="stat-s" id="sv-confirmed-s"></div></div>
+    <div class="stat"><div class="stat-v" id="sv-confirmed">-</div><div class="stat-l">人工已确认</div></div>
     <div class="stat"><div class="stat-v" id="sv-vectors">-</div><div class="stat-l">向量数量</div><div class="stat-s" id="sv-vstate"></div></div>
   </div>
   <div class="g2">
@@ -184,7 +184,7 @@ select.fi{cursor:pointer}
         <div class="cb">
           <div class="dist-bar" id="dist-bar"></div>
           <div class="dist-leg" id="dist-leg"></div>
-          <div style="margin-top:14px;font-size:.78rem;color:var(--ink-muted)" id="dist-empty">暂无数据</div>
+          <div style="font-size:.78rem;color:var(--ink-muted)" id="dist-empty">暂无数据</div>
         </div>
       </div>
       <div class="card">
@@ -195,9 +195,7 @@ select.fi{cursor:pointer}
     <div>
       <div class="card">
         <div class="ch"><span class="ic">🏢</span>企业概况</div>
-        <div class="cb" id="ov-companies">
-          <div class="empty"><div class="big">🏢</div>暂无企业</div>
-        </div>
+        <div class="cb" id="ov-companies"><div class="empty"><div class="big">🏢</div>暂无企业</div></div>
       </div>
     </div>
   </div>
@@ -205,110 +203,136 @@ select.fi{cursor:pointer}
 
 <!-- 企业管理 -->
 <div class="view" id="view-companies">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <span style="font-weight:600;font-size:.95rem">企业列表</span>
-    <button class="btn btn-p btn-sm" onclick="openCreateModal()">+ 新建企业</button>
-  </div>
-  <div class="company-grid" id="company-grid">
-    <div class="empty"><div class="big">🏢</div>暂无企业</div>
-  </div>
-
-  <div class="card" id="company-detail" style="display:none;margin-top:18px">
-    <div class="ch">
-      <span class="ic">📁</span>
-      <span id="detail-name">文件列表</span>
-      <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
-      <span style="flex:1"></span>
-      <button class="btn btn-g btn-sm" onclick="switchView('ingest')" style="margin-right:6px">扫描入库</button>
-      <button class="btn btn-d btn-sm" id="detail-del-btn">删除企业</button>
-      <button class="btn btn-g btn-sm" onclick="closeDetail()" style="margin-left:6px">关闭</button>
-    </div>
-    <!-- 列表头 -->
-    <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;padding:8px 12px;font-size:.71rem;font-weight:600;color:var(--ink-muted);border-bottom:1px solid var(--border)">
-      <span>文件名</span>
-      <span style="text-align:center;min-width:100px">文件类型</span>
-      <span style="text-align:center;min-width:54px">确认</span>
-      <span style="text-align:center;min-width:54px">状态</span>
-      <span style="text-align:center;min-width:120px">操作</span>
-    </div>
-    <div class="cb" id="detail-files" style="padding:8px 12px"></div>
-  </div>
-</div>
-
-<!-- 文件入库 -->
-<div class="view" id="view-ingest">
   <div class="g2">
+
+    <!-- 左侧：新建企业 + 文件夹上传 -->
     <div>
       <div class="card">
-        <div class="ch"><span class="ic">📤</span>上传文件</div>
+        <div class="ch"><span class="ic">➕</span>新建企业并上传资料</div>
         <div class="cb">
-          <div class="dz" id="dz">
-            <input type="file" id="fu" multiple
-              accept=".pdf,.docx,.doc,.docm,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.bmp,.tiff,.tif,.txt,.md"/>
-            <div style="font-size:1.8rem;opacity:.3;margin-bottom:6px">📄</div>
-            <div style="font-size:.84rem;color:var(--ink-soft)">点击或拖拽文件到此处</div>
-            <div style="font-size:.73rem;color:var(--ink-muted);margin-top:3px">PDF · DOCX · XLSX · JPG · PNG 等</div>
-          </div>
-          <div id="flist" style="margin-top:9px;display:flex;flex-direction:column;gap:4px"></div>
-          <div style="margin-top:13px">
-            <div class="fg">
-              <label class="fl">所属企业</label>
-              <select class="fi" id="ul-company"><option value="">— 不关联企业 —</option></select>
-            </div>
-            <div class="fg">
-              <label class="fl">文件类型（留空自动推断）</label>
-              <select class="fi" id="ul-type">
-                <option value="">自动推断</option>
-                <option value="license">营业执照</option>
-                <option value="invoice">发票/单据</option>
-                <option value="table">表格/报表</option>
-                <option value="nameplate">设备铭牌</option>
-                <option value="document">文档</option>
-              </select>
+
+          <!-- Step 1: 填写企业信息 -->
+          <div class="step-row">
+            <span class="step-badge" id="step1-badge">1</span>
+            <div class="step-content">
+              <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">填写企业信息</div>
+              <div class="fg">
+                <label class="fl">企业 ID（唯一标识，建议英文+数字）</label>
+                <input class="fi" id="new-cid" placeholder="例：company_001"/>
+              </div>
+              <div class="fg" style="margin-bottom:0">
+                <label class="fl">企业名称</label>
+                <input class="fi" id="new-cname" placeholder="重庆××有限公司"/>
+              </div>
             </div>
           </div>
-          <div class="prog" id="ul-prog"><div class="prog-bar" id="ul-bar" style="width:0"></div></div>
-          <div style="font-size:.73rem;color:var(--ink-muted);text-align:center;margin-top:4px" id="ul-status"></div>
-          <button class="btn btn-p btn-fw" id="ul-btn" style="margin-top:8px">⚙️ 处理并入库</button>
+
+          <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+          <!-- Step 2: 选择文件夹 -->
+          <div class="step-row">
+            <span class="step-badge" id="step2-badge">2</span>
+            <div class="step-content">
+              <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">选择企业资料文件夹</div>
+              <div class="folder-dz" id="folder-dz" onclick="document.getElementById('folder-input').click()">
+                <input type="file" id="folder-input" webkitdirectory multiple/>
+                <div style="font-size:2rem;opacity:.4;margin-bottom:8px">📁</div>
+                <div style="font-size:.87rem;color:var(--ink-soft);font-weight:500">点击选择文件夹</div>
+                <div style="font-size:.75rem;color:var(--ink-muted);margin-top:4px">支持整个目录，保持子目录结构</div>
+              </div>
+              <div id="folder-summary" style="display:none;margin-top:10px;padding:10px 12px;background:var(--paper);border-radius:8px;font-size:.82rem">
+                <div id="folder-summary-text"></div>
+                <div class="upload-file-list" id="folder-file-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+          <!-- Step 3: 上传 -->
+          <div class="step-row">
+            <span class="step-badge" id="step3-badge">3</span>
+            <div class="step-content">
+              <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">上传文件到服务器</div>
+              <div class="prog" id="upload-prog"><div class="prog-bar" id="upload-bar" style="width:0"></div></div>
+              <div style="font-size:.73rem;color:var(--ink-muted);margin:4px 0 8px" id="upload-status"></div>
+              <button class="btn btn-p btn-fw" id="upload-btn" onclick="doFolderUpload()">
+                📤 上传文件夹
+              </button>
+            </div>
+          </div>
+
+          <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+          <!-- Step 4: 入库 -->
+          <div class="step-row">
+            <span class="step-badge" id="step4-badge">4</span>
+            <div class="step-content">
+              <div style="font-weight:600;font-size:.85rem;margin-bottom:4px">开始入库</div>
+              <div style="font-size:.78rem;color:var(--ink-muted);margin-bottom:8px">文件上传完成后，点击开始解析并写入知识库</div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-p" style="flex:1" id="scan-async-btn" onclick="doNewScan(false)" disabled>
+                  🚀 异步入库
+                </button>
+                <button class="btn btn-g" style="flex:1" id="scan-sync-btn" onclick="doNewScan(true)" disabled>
+                  ⏳ 同步等待
+                </button>
+              </div>
+              <div class="slog" id="scan-log"></div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
+
+    <!-- 右侧：企业列表 -->
     <div>
-      <div class="card">
-        <div class="ch"><span class="ic">📂</span>扫描企业目录</div>
-        <div class="cb">
-          <div style="font-size:.81rem;color:var(--ink-muted);line-height:1.7;margin-bottom:14px">
-            自动递归扫描 <code style="background:var(--paper);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:.8rem">uploaded_files/{企业ID}/</code>
-          </div>
-          <div class="fg">
-            <label class="fl">选择企业 *</label>
-            <select class="fi" id="sc-company"><option value="">请先创建企业</option></select>
-          </div>
-          <div class="fg">
-            <label class="fl">强制指定类型（留空自动推断）</label>
-            <select class="fi" id="sc-type">
-              <option value="">自动推断</option>
-              <option value="license">营业执照</option>
-              <option value="invoice">发票/单据</option>
-              <option value="table">表格/报表</option>
-              <option value="nameplate">设备铭牌</option>
-              <option value="document">文档</option>
-            </select>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:4px">
-            <button class="btn btn-p" style="flex:1" id="sc-async-btn" onclick="doScan(false)">🚀 异步扫描</button>
-            <button class="btn btn-g" style="flex:1" id="sc-sync-btn"  onclick="doScan(true)">⏳ 同步等待</button>
-          </div>
-          <div class="slog" id="slog"></div>
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-weight:600;font-size:.95rem">企业列表</span>
+        <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
       </div>
-      <div class="card">
-        <div class="ch"><span class="ic">🗑</span>知识库管理</div>
-        <div class="cb">
-          <button class="btn btn-d btn-fw" id="clear-btn">🗑 清空整个知识库</button>
-          <div style="font-size:.73rem;color:var(--ink-muted);text-align:center;margin-top:6px">删除全部 Milvus 向量和 SQLite 记录，不可撤销</div>
-        </div>
+      <div class="company-grid" id="company-grid">
+        <div class="empty"><div class="big">🏢</div>暂无企业</div>
       </div>
+
+      <!-- 企业详情 -->
+      <div class="card" id="company-detail" style="display:none;margin-top:14px">
+        <div class="ch">
+          <span class="ic">📁</span>
+          <span id="detail-name"></span>
+          <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
+          <span style="flex:1"></span>
+          <button class="btn btn-d btn-sm" id="detail-del-btn">删除企业</button>
+          <button class="btn btn-g btn-sm" onclick="closeDetail()" style="margin-left:6px">关闭</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;padding:8px 12px;font-size:.71rem;font-weight:600;color:var(--ink-muted);border-bottom:1px solid var(--border)">
+          <span>文件名</span>
+          <span style="min-width:100px;text-align:center">文件类型</span>
+          <span style="min-width:54px;text-align:center">确认</span>
+          <span style="min-width:54px;text-align:center">状态</span>
+          <span style="min-width:120px;text-align:center">操作</span>
+        </div>
+        <div class="cb" id="detail-files" style="padding:8px 12px"></div>
+
+        <!-- 再次入库操作 -->
+        <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
+          <span style="font-size:.8rem;color:var(--ink-muted);flex:1">重新扫描入库：</span>
+          <button class="btn btn-warn btn-sm" id="rescan-async-btn" onclick="doRescan(false)">🚀 异步入库</button>
+          <button class="btn btn-g btn-sm" id="rescan-sync-btn" onclick="doRescan(true)">⏳ 同步等待</button>
+        </div>
+        <div class="slog" id="rescan-log" style="margin:0 12px 12px"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 知识库管理 -->
+  <div class="card" style="margin-top:14px">
+    <div class="ch"><span class="ic">🗑</span>知识库管理</div>
+    <div class="cb" style="display:flex;align-items:center;gap:16px">
+      <button class="btn btn-d" id="clear-btn">🗑 清空整个知识库</button>
+      <span style="font-size:.78rem;color:var(--ink-muted)">删除全部向量和记录，不可撤销</span>
     </div>
   </div>
 </div>
@@ -329,7 +353,7 @@ select.fi{cursor:pointer}
         <select id="q-company"><option value="">全部企业</option></select>
         <label>类型：</label>
         <select id="q-type">
-          <option value="">全部类型</option>
+          <option value="">全部</option>
           <option value="license">营业执照</option>
           <option value="invoice">发票</option>
           <option value="table">表格</option>
@@ -350,29 +374,7 @@ select.fi{cursor:pointer}
   <div class="card">
     <div class="ch"><span class="ic">📑</span>检索来源</div>
     <div class="cb">
-      <div id="results">
-        <div class="empty"><div class="big">🔎</div>输入问题开始搜索</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- 弹窗：新建企业 -->
-<div class="modal" id="m-create">
-  <div class="mbox">
-    <button class="mclose" onclick="closeModal('m-create')">✕</button>
-    <div class="mtitle">新建企业</div>
-    <div class="fg">
-      <label class="fl">企业 ID（唯一标识，建议英文+数字）</label>
-      <input class="fi" id="m-id" placeholder="例：company_001 或 aulong"/>
-    </div>
-    <div class="fg">
-      <label class="fl">企业名称</label>
-      <input class="fi" id="m-name" placeholder="重庆××有限公司"/>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn btn-p" style="flex:1" onclick="createCompany()">创建</button>
-      <button class="btn btn-g" style="flex:1" onclick="closeModal('m-create')">取消</button>
+      <div id="results"><div class="empty"><div class="big">🔎</div>输入问题开始搜索</div></div>
     </div>
   </div>
 </div>
@@ -393,7 +395,9 @@ const STATUS_LABEL = {done:'完成',failed:'失败',pending:'处理中'};
 const STATUS_CLS   = {done:'tg-done',failed:'tg-failed',pending:'tg-pending'};
 const DOC_TYPES    = ['license','invoice','table','nameplate','document','unknown'];
 
-let healthData = {}, companies = [], uploadFiles = [];
+let healthData = {}, companies = [];
+let folderFiles = [];       // 选中的文件列表
+let uploadedCompanyId = ''; // 上传成功后记录企业ID，用于入库
 
 // ── 视图切换 ──────────────────────────────────────────────────────────────
 function switchView(name) {
@@ -402,7 +406,7 @@ function switchView(name) {
   document.getElementById('view-' + name).classList.add('active');
   if (name === 'overview')  loadOverview();
   if (name === 'companies') loadCompanies();
-  if (name === 'ingest' || name === 'query') refreshSelects();
+  if (name === 'query')     refreshSelects();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
@@ -433,12 +437,11 @@ async function fetchHealth() {
 function showHealth() {
   const d = healthData;
   document.getElementById('health-rows').innerHTML = [
-    ['状态',    d.milvus ? '<span class="ok">✓ 正常</span>' : '<span class="fail">⚠ 部分不可用</span>'],
+    ['状态',    d.milvus ? '<span class="ok">✓ 正常</span>' : '<span class="fail">⚠ 不可用</span>'],
     ['Milvus',  d.milvus ? '<span class="ok">✓ 已连接</span>' : '<span class="fail">✗ 未连接</span>'],
-    ['集合',    d.collection||'-'],
     ['向量模型',d.embed_model||'-'],
-    ['推理设备',d.embed_device||'cpu'],
-    ['OCR 后端',d.vl_backend||'本地CPU'],
+    ['Reranker',  d.reranker_model||'-'],
+    ['OCR 后端',d.vl_backend||'本地'],
     ['对话模型',d.llm_model||'-'],
     ['LLM 地址',d.llm_api_base||'-'],
   ].map(([k,v]) => `<div class="hrow"><span class="hkey">${k}</span><span class="hval">${v}</span></div>`).join('');
@@ -453,9 +456,8 @@ async function loadOverview() {
   const d = healthData, s = d.stats || {};
   document.getElementById('sv-companies').textContent = s.total_companies ?? '-';
   document.getElementById('sv-files').textContent     = s.done_files ?? '-';
-  document.getElementById('sv-files-s').textContent   = `失败 ${s.failed_files||0} · 处理中 ${Math.max(0,(s.total_files||0)-(s.done_files||0)-(s.failed_files||0))}`;
+  document.getElementById('sv-files-s').textContent   = `失败 ${s.failed_files||0}`;
   document.getElementById('sv-confirmed').textContent = s.confirmed_files ?? '-';
-  document.getElementById('sv-confirmed-s').textContent = `共 ${s.total_files||0} 个文件`;
   document.getElementById('sv-vectors').textContent   = d.vector_count ?? '-';
   document.getElementById('sv-vstate').textContent    = d.milvus ? 'Milvus ✓' : 'Milvus 未连接';
 
@@ -471,7 +473,8 @@ async function loadOverview() {
   document.getElementById('sys-detail').innerHTML = [
     `Milvus：<strong>${d.milvus?'✓ 在线':'✗ 离线'}</strong>  ${d.milvus_host||'localhost'}:${d.milvus_port||19530}`,
     `向量模型：<strong>${d.embed_model||'-'}</strong>  ${d.embed_device||'cpu'}`,
-    `OCR：<strong>${d.vl_backend||'本地CPU'}</strong>${d.got_ocr_ready?' · GOT-OCR2 ✓':''}`,
+    `Reranker：<strong>${d.reranker_model||'-'}</strong>`,
+    `OCR：<strong>${d.vl_backend||'本地'}</strong>`,
     `LLM：<strong>${d.llm_model||'-'}</strong>`,
   ].map(s=>`<div>${s}</div>`).join('');
 
@@ -482,14 +485,13 @@ async function loadOverview() {
     return;
   }
   el.innerHTML = companies.map(c => `
-    <div class="frow" style="cursor:pointer;grid-template-columns:1fr auto auto" onclick="switchView('companies')">
-      <span class="fname" style="font-weight:500">🏢 ${c.name}</span>
-      <span style="font-size:.75rem;color:var(--ink-muted)">${c.file_count} 文件</span>
-      <span style="font-size:.75rem;color:var(--success)">${c.done_count} 完成</span>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border);font-size:.83rem;cursor:pointer" onclick="switchView('companies')">
+      <span style="font-weight:500">🏢 ${c.name}</span>
+      <span style="color:var(--ink-muted)">${c.file_count} 文件 · ${c.done_count} 完成</span>
     </div>`).join('');
 }
 
-// ── 企业管理 ──────────────────────────────────────────────────────────────
+// ── 企业列表 ──────────────────────────────────────────────────────────────
 let selectedCid = null;
 
 async function loadCompaniesData() {
@@ -501,9 +503,10 @@ async function loadCompaniesData() {
 
 async function loadCompanies() {
   await loadCompaniesData();
+  refreshSelects();
   const grid = document.getElementById('company-grid');
   if (!companies.length) {
-    grid.innerHTML = '<div class="empty"><div class="big">🏢</div>暂无企业，点击右上角新建</div>';
+    grid.innerHTML = '<div class="empty"><div class="big">🏢</div>暂无企业</div>';
     return;
   }
   grid.innerHTML = companies.map(c => `
@@ -525,149 +528,82 @@ async function selectCompany(cid) {
     const d = await fetch(`/api/companies/${cid}`).then(r=>r.json());
     document.getElementById('detail-name').textContent = d.name;
     const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
-    const total     = (d.files||[]).length;
     document.getElementById('detail-confirm-badge').textContent =
-      total ? `已确认 ${confirmed}/${total}` : '';
+      d.files.length ? `已确认 ${confirmed}/${d.files.length}` : '';
     document.getElementById('detail-del-btn').onclick = () => deleteCompany(cid, d.name);
-    renderFileList(d.files || [], cid);
-    const detail = document.getElementById('company-detail');
-    detail.style.display = 'block';
-    detail.scrollIntoView({behavior:'smooth', block:'nearest'});
-  } catch { toast('加载企业详情失败','error'); }
+    renderFileList(d.files||[], cid);
+    document.getElementById('company-detail').style.display = 'block';
+    document.getElementById('company-detail').scrollIntoView({behavior:'smooth',block:'nearest'});
+  } catch { toast('加载失败','error'); }
 }
 
 function renderFileList(files, cid) {
   const el = document.getElementById('detail-files');
   if (!files.length) {
-    el.innerHTML = '<div class="empty"><div class="big">📁</div>暂无文件</div>';
+    el.innerHTML = '<div class="empty" style="padding:20px"><div class="big">📁</div>暂无文件</div>';
     return;
   }
   el.innerHTML = files.map(f => {
-    const fileId    = f.file_id;   // 完整 file_id（后端已返回完整值）
-    const confirmed = f.doc_type_confirmed;
-    const confirmBadge = confirmed
-      ? '<span class="tag tg-confirmed" title="人工已确认">✓ 已确认</span>'
-      : '<span class="tag tg-auto" title="自动推断">自动</span>';
-
-    // doc_type 下拉，默认值为当前类型
+    const fileId = f.file_id;
+    const confirmBadge = f.doc_type_confirmed
+      ? '<span class="tag tg-confirmed">✓ 已确认</span>'
+      : '<span class="tag tg-auto">自动</span>';
     const dtOptions = DOC_TYPES.map(t =>
-      `<option value="${t}" ${t===f.doc_type?'selected':''}>${TYPE_LABEL[t]||t}</option>`
-    ).join('');
-
+      `<option value="${t}" ${t===f.doc_type?'selected':''}>${TYPE_LABEL[t]||t}</option>`).join('');
     return `
     <div class="frow" id="frow-${fileId}">
       <span class="fname" title="${f.filename}">📄 ${f.filename}</span>
-
-      <select class="dt-select" id="dt-${fileId}"
-        onchange="onDtChange('${fileId}', this)">
-        ${dtOptions}
-      </select>
-
+      <select class="dt-select" id="dt-${fileId}" onchange="onDtChange('${fileId}',this)">${dtOptions}</select>
       <span>${confirmBadge}</span>
-
       <span class="tag ${STATUS_CLS[f.status]||'tg-unknown'}">${STATUS_LABEL[f.status]||f.status}</span>
-
       <div class="frow-actions">
-        <button class="btn btn-g btn-sm" id="save-dt-${fileId}" style="display:none"
-          onclick="saveDtType('${fileId}', '${cid}')">
-          💾 保存
-        </button>
-        <button class="btn btn-warn btn-sm reprocess-btn" id="repr-${fileId}"
-          onclick="reprocessFile('${fileId}', '${f.filename}')">
-          🔄 重新处理
-        </button>
+        <button class="btn btn-g btn-sm" id="save-dt-${fileId}" style="display:none" onclick="saveDtType('${fileId}','${cid}')">💾 保存</button>
+        <button class="btn btn-warn btn-sm" id="repr-${fileId}" onclick="reprocessFile('${fileId}','${f.filename}')">🔄 重处理</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// doc_type 下拉变化时显示保存按钮
-function onDtChange(fileId, selectEl) {
-  const saveBtn = document.getElementById(`save-dt-${fileId}`);
-  if (saveBtn) {
-    saveBtn.style.display = 'inline-flex';
-    selectEl.classList.add('changed');
-  }
+function onDtChange(fileId, sel) {
+  document.getElementById(`save-dt-${fileId}`).style.display = 'inline-flex';
+  sel.classList.add('changed');
 }
 
-// 保存 doc_type 修改
 async function saveDtType(fileId, cid) {
-  const selectEl = document.getElementById(`dt-${fileId}`);
-  const saveBtn  = document.getElementById(`save-dt-${fileId}`);
-  if (!selectEl) return;
-
-  const newType = selectEl.value;
-  saveBtn.disabled = true;
-  saveBtn.innerHTML = '<span class="spin">⚙️</span>';
-
+  const sel = document.getElementById(`dt-${fileId}`);
+  const btn = document.getElementById(`save-dt-${fileId}`);
+  btn.disabled = true; btn.innerHTML = '<span class="spin">⚙️</span>';
   try {
     const r = await fetch(`/api/files/${fileId}/doc_type`, {
-      method: 'PATCH',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({doc_type: newType, confirmed: true}),
+      method:'PATCH', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({doc_type: sel.value, confirmed: true}),
     });
-    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'保存失败'); }
-    const d = await r.json();
-    toast(`已确认：${TYPE_LABEL[newType]}`, 'success');
-    selectEl.classList.remove('changed');
-    saveBtn.style.display = 'none';
-
-    // 刷新确认标记
-    const row = document.getElementById(`frow-${fileId}`);
-    if (row) {
-      const badge = row.querySelector('.tag.tg-auto, .tag.tg-confirmed');
-      if (badge) {
-        badge.className = 'tag tg-confirmed';
-        badge.title = '人工已确认';
-        badge.textContent = '✓ 已确认';
-      }
-    }
-    // 更新企业卡片确认数
-    await loadCompaniesData();
-    loadCompanies();
-    updateDetailBadge(cid);
-  } catch(e) {
-    toast(e.message, 'error');
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.innerHTML = '💾 保存';
-  }
+    if (!r.ok) throw new Error((await r.json()).detail||'保存失败');
+    toast(`已确认：${TYPE_LABEL[sel.value]}`,'success');
+    sel.classList.remove('changed');
+    btn.style.display = 'none';
+    const badge = document.querySelector(`#frow-${fileId} .tg-auto, #frow-${fileId} .tg-confirmed`);
+    if (badge) { badge.className='tag tg-confirmed'; badge.textContent='✓ 已确认'; }
+    await loadCompaniesData(); loadCompanies();
+  } catch(e) { toast(e.message,'error'); }
+  finally { btn.disabled=false; btn.innerHTML='💾 保存'; }
 }
 
-async function updateDetailBadge(cid) {
-  try {
-    const d = await fetch(`/api/companies/${cid}`).then(r=>r.json());
-    const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
-    const total     = (d.files||[]).length;
-    document.getElementById('detail-confirm-badge').textContent =
-      total ? `已确认 ${confirmed}/${total}` : '';
-  } catch {}
-}
-
-// 重新处理文件
 async function reprocessFile(fileId, filename) {
-  if (!confirm(`重新处理文件：${filename}\n\n将删除旧向量数据并重新解析入库，确认继续？`)) return;
-
+  if (!confirm(`重新处理：${filename}\n\n将删除旧向量并重新解析，确认继续？`)) return;
   const btn = document.getElementById(`repr-${fileId}`);
-  if (btn) { btn.classList.add('processing'); btn.innerHTML = '<span class="spin">🔄</span> 处理中'; }
-
+  btn.innerHTML = '<span class="spin">🔄</span>';  btn.disabled = true;
   try {
-    const r = await fetch(`/api/files/${fileId}/reprocess`, {method: 'POST'});
-    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'重处理失败'); }
-    const d = await r.json();
-    toast(`${filename} 已提交重新处理`, 'success');
-
-    // 更新该行状态为处理中
+    const r = await fetch(`/api/files/${fileId}/reprocess`, {method:'POST'});
+    if (!r.ok) throw new Error((await r.json()).detail||'失败');
+    toast(`${filename} 已提交重新处理`,'success');
     const row = document.getElementById(`frow-${fileId}`);
     if (row) {
-      const statusTag = row.querySelector('.tag.tg-done, .tag.tg-failed, .tag.tg-pending');
-      if (statusTag) { statusTag.className='tag tg-pending'; statusTag.textContent='处理中'; }
+      const tag = row.querySelector('[class*="tg-"]');
+      if (tag) { tag.className='tag tg-pending'; tag.textContent='处理中'; }
     }
-  } catch(e) {
-    toast(e.message, 'error');
-  } finally {
-    if (btn) { btn.classList.remove('processing'); btn.innerHTML = '🔄 重新处理'; }
-  }
+  } catch(e) { toast(e.message,'error'); }
+  finally { btn.innerHTML='🔄 重处理'; btn.disabled=false; }
 }
 
 function closeDetail() {
@@ -675,171 +611,204 @@ function closeDetail() {
   selectedCid = null; loadCompanies();
 }
 
-function openCreateModal() {
-  document.getElementById('m-id').value = '';
-  document.getElementById('m-name').value = '';
-  openModal('m-create');
-}
-
-async function createCompany() {
-  const cid  = document.getElementById('m-id').value.trim();
-  const name = document.getElementById('m-name').value.trim();
-  if (!cid||!name) { toast('请填写企业 ID 和名称','warning'); return; }
-  try {
-    const r = await fetch('/api/companies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({company_id:cid,name})});
-    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'创建失败'); }
-    toast(`企业"${name}"创建成功`,'success');
-    closeModal('m-create');
-    await loadCompaniesData(); loadCompanies(); refreshSelects();
-  } catch(e) { toast(e.message,'error'); }
-}
-
 async function deleteCompany(cid, name) {
-  if (!confirm(`确定删除企业"${name}"？\n\n将同时删除所有文件记录和向量数据。`)) return;
+  if (!confirm(`确定删除企业"${name}"？将同时删除所有文件记录和向量数据。`)) return;
   try {
     const r = await fetch(`/api/companies/${cid}`,{method:'DELETE'});
-    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'删除失败'); }
-    const d = await r.json();
-    toast(`已删除企业"${name}"，${d.files_deleted} 个文件记录`,'success');
+    if (!r.ok) throw new Error((await r.json()).detail||'删除失败');
+    toast(`已删除企业"${name}"`,'success');
     selectedCid = null;
     document.getElementById('company-detail').style.display = 'none';
-    await loadCompaniesData(); loadCompanies(); refreshSelects();
+    await loadCompaniesData(); loadCompanies();
   } catch(e) { toast(e.message,'error'); }
 }
 
-function refreshSelects() {
-  ['ul-company','sc-company','q-company'].forEach(id => {
-    const el = document.getElementById(id);
-    const first = el.options[0].outerHTML;
-    el.innerHTML = first + companies.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
-  });
-}
+// ── 文件夹选择 ────────────────────────────────────────────────────────────
+document.getElementById('folder-input').addEventListener('change', function() {
+  folderFiles = [...this.files];
+  if (!folderFiles.length) return;
 
-// ── 文件上传 ──────────────────────────────────────────────────────────────
-const dzEl = document.getElementById('dz');
-const fuEl = document.getElementById('fu');
-dzEl.addEventListener('click', ()=>fuEl.click());
-fuEl.addEventListener('change', e=>addFiles([...e.target.files]));
-dzEl.addEventListener('dragover', e=>{e.preventDefault();dzEl.classList.add('over')});
-dzEl.addEventListener('dragleave', ()=>dzEl.classList.remove('over'));
-dzEl.addEventListener('drop', e=>{e.preventDefault();dzEl.classList.remove('over');addFiles([...e.dataTransfer.files])});
-function addFiles(fs){ uploadFiles=[...uploadFiles,...fs]; renderFList(); }
-function removeFile(i){ uploadFiles.splice(i,1); renderFList(); }
-function renderFList(){
-  document.getElementById('flist').innerHTML = uploadFiles.map((f,i)=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--paper);border-radius:6px;font-size:.79rem;color:var(--ink-soft)">
-      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px">${f.name}</span>
-      <button onclick="removeFile(${i})" style="background:none;border:none;cursor:pointer;color:var(--ink-muted)">✕</button>
-    </div>`).join('');
-}
+  const summary = document.getElementById('folder-summary');
+  const summaryText = document.getElementById('folder-summary-text');
+  const fileList = document.getElementById('folder-file-list');
 
-document.getElementById('ul-btn').addEventListener('click', async ()=>{
-  if (!uploadFiles.length) { toast('请先选择文件','warning'); return; }
-  const btn=document.getElementById('ul-btn'), prog=document.getElementById('ul-prog');
-  const bar=document.getElementById('ul-bar'), stat=document.getElementById('ul-status');
-  const cid=document.getElementById('ul-company').value, dt=document.getElementById('ul-type').value;
-  btn.disabled=true; btn.innerHTML='<span class="spin">⚙️</span> 处理中…';
-  prog.classList.add('on');
-  let ok=0,skip=0,fail=0;
-  for (let i=0;i<uploadFiles.length;i++) {
-    bar.style.width=Math.round((i/uploadFiles.length)*100)+'%';
-    stat.textContent=`${i+1}/${uploadFiles.length}  ${uploadFiles[i].name}`;
-    try {
-      const fd=new FormData(); fd.append('file',uploadFiles[i]);
-      let url='/api/ingest?sync=true';
-      if (cid) url+=`&company_id=${encodeURIComponent(cid)}`;
-      if (dt)  url+=`&doc_type=${encodeURIComponent(dt)}`;
-      const d=await fetch(url,{method:'POST',body:fd}).then(r=>r.json());
-      if (d.status==='done') ok++; else if(d.status==='skipped') skip++; else fail++;
-    } catch { fail++; }
-  }
-  bar.style.width='100%';
-  stat.textContent=`完成：${ok} 入库 · ${skip} 跳过 · ${fail} 失败`;
-  toast(`入库完成：${ok} 成功 / ${skip} 跳过 / ${fail} 失败`, ok>0?'success':fail>0?'error':'warning');
-  uploadFiles=[]; renderFList();
-  btn.disabled=false; btn.innerHTML='⚙️ 处理并入库';
-  if (ok>0) { loadOverview(); loadCompaniesData(); }
+  summary.style.display = 'block';
+  summaryText.innerHTML = `<strong>${folderFiles.length}</strong> 个文件，来自文件夹 <code style="font-family:JetBrains Mono,monospace;font-size:.78rem;background:var(--accent-bg);padding:1px 5px;border-radius:3px">${folderFiles[0].webkitRelativePath.split('/')[0]}</code>`;
+
+  // 显示前20个文件
+  fileList.innerHTML = folderFiles.slice(0, 20).map(f => `
+    <div class="upload-file-item">
+      <span class="upload-file-path">${f.webkitRelativePath}</span>
+      <span style="color:var(--ink-muted);font-size:.68rem;flex-shrink:0">${(f.size/1024).toFixed(0)}KB</span>
+    </div>`).join('') + (folderFiles.length > 20
+      ? `<div style="text-align:center;color:var(--ink-muted);font-size:.75rem;padding:6px">还有 ${folderFiles.length-20} 个文件...</div>`
+      : '');
+
+  document.getElementById('step2-badge').className = 'step-badge done';
 });
 
-// ── 目录扫描 ──────────────────────────────────────────────────────────────
-async function doScan(sync) {
-  const cid=document.getElementById('sc-company').value;
-  if (!cid) { toast('请选择企业','warning'); return; }
-  const dt=document.getElementById('sc-type').value;
-  const log=document.getElementById('slog');
-  const btnA=document.getElementById('sc-async-btn'), btnS=document.getElementById('sc-sync-btn');
-  btnA.disabled=btnS.disabled=true;
+// ── 文件夹上传 ────────────────────────────────────────────────────────────
+async function doFolderUpload() {
+  const cid   = document.getElementById('new-cid').value.trim();
+  const cname = document.getElementById('new-cname').value.trim();
+
+  if (!cid)   { toast('请填写企业 ID','warning'); return; }
+  if (!cname) { toast('请填写企业名称','warning'); return; }
+  if (!folderFiles.length) { toast('请先选择文件夹','warning'); return; }
+
+  const btn  = document.getElementById('upload-btn');
+  const prog = document.getElementById('upload-prog');
+  const bar  = document.getElementById('upload-bar');
+  const stat = document.getElementById('upload-status');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">📤</span> 上传中…';
+  prog.classList.add('on');
+  stat.textContent = '准备上传…';
+
+  // 分批上传，每批 20 个文件，避免请求体过大
+  const BATCH = 20;
+  let savedTotal = 0, skippedTotal = 0;
+
+  for (let i = 0; i < folderFiles.length; i += BATCH) {
+    const batch = folderFiles.slice(i, Math.min(i + BATCH, folderFiles.length));
+    const pct = Math.round((i / folderFiles.length) * 100);
+    bar.style.width = pct + '%';
+    stat.textContent = `上传中 ${i+1}~${Math.min(i+BATCH, folderFiles.length)} / ${folderFiles.length}`;
+
+    const fd = new FormData();
+    fd.append('company_id', cid);
+    fd.append('company_name', cname);
+    batch.forEach(f => {
+      fd.append('files', f);
+      fd.append('relative_paths', f.webkitRelativePath);
+    });
+
+    try {
+      const r = await fetch('/api/upload/folder', {method:'POST', body: fd});
+      if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'上传失败'); }
+      const d = await r.json();
+      savedTotal   += d.saved;
+      skippedTotal += d.skipped;
+    } catch(e) {
+      toast('上传失败: ' + e.message, 'error');
+      btn.disabled = false; btn.innerHTML = '📤 上传文件夹';
+      return;
+    }
+  }
+
+  bar.style.width = '100%';
+  stat.textContent = `上传完成：${savedTotal} 个文件成功，${skippedTotal} 个跳过`;
+  toast(`文件上传完成，共 ${savedTotal} 个`, 'success');
+
+  // 标记步骤完成，解锁入库按钮
+  document.getElementById('step3-badge').className = 'step-badge done';
+  document.getElementById('scan-async-btn').disabled = false;
+  document.getElementById('scan-sync-btn').disabled  = false;
+  uploadedCompanyId = cid;
+
+  btn.disabled = false;
+  btn.innerHTML = '✓ 上传完成';
+
+  await loadCompaniesData();
+  loadCompanies();
+}
+
+// ── 新企业入库扫描 ────────────────────────────────────────────────────────
+async function doNewScan(sync) {
+  if (!uploadedCompanyId) { toast('请先上传文件','warning'); return; }
+  await _doScan(uploadedCompanyId, sync, 'scan-log',
+    document.getElementById('scan-async-btn'),
+    document.getElementById('scan-sync-btn'));
+  document.getElementById('step4-badge').className = 'step-badge done';
+}
+
+// ── 现有企业重新扫描 ──────────────────────────────────────────────────────
+async function doRescan(sync) {
+  if (!selectedCid) { toast('请先选择企业','warning'); return; }
+  await _doScan(selectedCid, sync, 'rescan-log',
+    document.getElementById('rescan-async-btn'),
+    document.getElementById('rescan-sync-btn'));
+}
+
+async function _doScan(cid, sync, logId, btnAsync, btnSync) {
+  const log = document.getElementById(logId);
+  btnAsync.disabled = btnSync.disabled = true;
   log.classList.add('on');
-  const ts=()=>new Date().toLocaleTimeString();
-  log.textContent=`[${ts()}] 开始扫描 uploaded_files/${cid}/ ...\n`;
-  let url=`/api/ingest/scan/${encodeURIComponent(cid)}?sync=${sync}`;
-  if (dt) url+=`&doc_type=${encodeURIComponent(dt)}`;
+  const ts = () => new Date().toLocaleTimeString();
+  log.textContent = `[${ts()}] 开始扫描 ${cid}...\n`;
+
   try {
-    const d=await fetch(url,{method:'POST'}).then(r=>r.json());
+    const r = await fetch(`/api/ingest/scan/${encodeURIComponent(cid)}?sync=${sync}`, {method:'POST'});
+    if (!r.ok) { const e=await r.json(); throw new Error(e.detail||'扫描失败'); }
+    const d = await r.json();
+
     if (sync) {
-      (d.results||[]).forEach(x=>{
-        log.textContent+=`[${x.status==='done'?'✓':'✗'}] ${x.file}  →  ${x.doc_type}  chunks:${x.chunks??'-'}\n`;
+      (d.results||[]).forEach(x => {
+        log.textContent += `[${x.status==='done'?'✓':'✗'}] ${x.file}  ${x.doc_type}  chunks:${x.chunks??'-'}\n`;
       });
-      log.textContent+=`\n[${ts()}] 完成，共 ${d.total} 个文件\n`;
-      toast(`扫描完成：${d.total} 个文件`,'success');
+      log.textContent += `\n[${ts()}] 完成，共 ${d.total} 个文件\n`;
+      toast(`入库完成：${d.total} 个文件`,'success');
       loadOverview();
     } else {
-      (d.files||[]).forEach(f=>{ log.textContent+=`[排队] ${f.file}  →  ${f.doc_type}\n`; });
-      log.textContent+=`\n[${ts()}] 已提交 ${d.total} 个文件到后台\n`;
-      toast(`已提交 ${d.total} 个文件`,'info');
+      (d.files||[]).forEach(f => { log.textContent += `[排队] ${f.file}  ${f.doc_type}\n`; });
+      log.textContent += `\n[${ts()}] 已提交 ${d.total} 个文件到后台\n`;
+      toast(`已提交 ${d.total} 个文件后台处理`,'info');
     }
-    log.scrollTop=log.scrollHeight;
+    log.scrollTop = log.scrollHeight;
   } catch(e) {
-    log.textContent+=`\n[错误] ${e.message}\n`;
-    toast('扫描失败：'+e.message,'error');
-  } finally { btnA.disabled=btnS.disabled=false; }
+    log.textContent += `\n[错误] ${e.message}\n`;
+    toast(e.message,'error');
+  } finally {
+    btnAsync.disabled = btnSync.disabled = false;
+  }
 }
 
 // ── 清空知识库 ────────────────────────────────────────────────────────────
-document.getElementById('clear-btn').addEventListener('click', async ()=>{
-  if (!confirm('确定清空整个知识库？\n\n将删除所有 Milvus 向量和 SQLite 记录，不可撤销。')) return;
-  const btn=document.getElementById('clear-btn');
+document.getElementById('clear-btn').addEventListener('click', async () => {
+  if (!confirm('确定清空整个知识库？\n\n将删除所有向量和记录，不可撤销。')) return;
+  const btn = document.getElementById('clear-btn');
   btn.disabled=true; btn.innerHTML='<span class="spin">🗑</span> 清空中…';
   try {
-    for (const c of companies) {
+    for (const c of companies)
       await fetch(`/api/companies/${c.company_id}`,{method:'DELETE'}).catch(()=>{});
-    }
     await fetch('/api/collection',{method:'DELETE'}).catch(()=>{});
     toast('知识库已清空','success');
-    await loadCompaniesData(); loadOverview(); refreshSelects();
-  } catch(e) { toast('清空失败：'+e.message,'error'); }
+    await loadCompaniesData(); loadOverview();
+  } catch(e) { toast('失败：'+e.message,'error'); }
   finally { btn.disabled=false; btn.innerHTML='🗑 清空整个知识库'; }
 });
 
 // ── 智能问答 ──────────────────────────────────────────────────────────────
 async function doSearch() {
-  const q=document.getElementById('qi').value.trim();
+  const q = document.getElementById('qi').value.trim();
   if (!q) { toast('请输入问题','warning'); return; }
-  const topk=document.getElementById('q-topk').value;
-  const cid=document.getElementById('q-company').value;
-  const dt=document.getElementById('q-type').value;
-  const btn=document.getElementById('qbtn');
+  const topk = document.getElementById('q-topk').value;
+  const cid  = document.getElementById('q-company').value;
+  const dt   = document.getElementById('q-type').value;
+  const btn  = document.getElementById('qbtn');
   btn.disabled=true; btn.innerHTML='<span class="spin">🔍</span> 搜索中…';
   document.getElementById('results').innerHTML='<div class="empty"><div class="spin" style="font-size:1.4rem">⚙️</div></div>';
   document.getElementById('answer-card').style.display='none';
   try {
-    let url=`/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
+    let url = `/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
     if (cid) url+=`&company_id=${encodeURIComponent(cid)}`;
     if (dt)  url+=`&doc_type=${encodeURIComponent(dt)}`;
-    const r=await fetch(url);
+    const r = await fetch(url);
     if (!r.ok) { const e=await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
-    const data=await r.json();
+    const data = await r.json();
 
     document.getElementById('answer-card').style.display='block';
-    document.getElementById('q-model').textContent=healthData.llm_model||'Qwen';
-    document.getElementById('q-reranker').textContent=data.reranker ? '✓ Reranker 精排' : '';
-    document.getElementById('answer-body').innerHTML=(data.answer||'').replace(/\[(\d+)\]/g,'<span style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--accent);background:var(--accent-bg);padding:1px 4px;border-radius:3px">[$1]</span>');
+    document.getElementById('q-model').textContent = healthData.llm_model||'Qwen';
+    document.getElementById('q-reranker').textContent = data.reranker ? '✓ Reranker 精排' : '';
+    document.getElementById('answer-body').innerHTML = (data.answer||'')
+      .replace(/\[(\d+)\]/g,'<span style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--accent);background:var(--accent-bg);padding:1px 4px;border-radius:3px">[$1]</span>');
 
-    const hits=data.chunks||[];
+    const hits = data.chunks||[];
     if (!hits.length) {
       document.getElementById('results').innerHTML='<div class="empty"><div class="big">🔎</div>未找到相关内容</div>';
     } else {
-      document.getElementById('results').innerHTML=hits.map((h,i)=>`
+      document.getElementById('results').innerHTML = hits.map((h,i) => `
         <div class="ri">
           <div class="ri-top">
             <div class="ri-num">${i+1}</div>
@@ -851,8 +820,8 @@ async function doSearch() {
           </div>
           <div class="ri-text">${esc(h.content||'')}</div>
           <div class="ri-score">
-            向量相似度 ${((h.score||0)*100).toFixed(1)}%
-            ${h.rerank_score!=null ? ' · Reranker ' + (h.rerank_score*100).toFixed(1)+'%' : ''}
+            向量 ${((h.score||0)*100).toFixed(1)}%
+            ${h.rerank_score!=null?' · Reranker '+(h.rerank_score*100).toFixed(1)+'%':''}
           </div>
         </div>`).join('');
     }
@@ -863,10 +832,16 @@ async function doSearch() {
 
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
 document.getElementById('qbtn').addEventListener('click', doSearch);
-document.getElementById('qi').addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey) doSearch(); });
+document.getElementById('qi').addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
+
+function refreshSelects() {
+  const el = document.getElementById('q-company');
+  const first = el.options[0].outerHTML;
+  el.innerHTML = first + companies.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
+}
 
 // ── 初始化 ────────────────────────────────────────────────────────────────
-(async ()=>{
+(async () => {
   await loadCompaniesData();
   loadOverview();
   refreshSelects();

@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     db_path: str = Field("data/rag_meta.db", description="SQLite 元数据库路径")
     log_level: str = Field("INFO", description="日志级别: DEBUG/INFO/WARNING/ERROR")
 
+    # ── Redis ──────────────────────────────────────────────────────────
+    redis_host:     str = Field("localhost", description="Redis 主机")
+    redis_port:     int = Field(6379,        description="Redis 端口")
+    redis_password: str = Field("",    description="Redis 密码，无则留空")
+    redis_db_broker:  int = Field(0, description="Celery Broker 用的 DB")
+    redis_db_backend: int = Field(1, description="Celery Result Backend 用的 DB")
+
     # ── Milvus 向量库 ─────────────────────────────────────────────────
     milvus_host: str = Field("localhost", description="Milvus 地址")
     milvus_port: int = Field(19530, description="Milvus 端口")
@@ -65,6 +72,11 @@ class Settings(BaseSettings):
     embedding_device: str = Field("cpu", description="向量模型推理设备")
     embedding_batch_size: int = Field(32, description="批量向量化大小")
 
+    # ── Reranker ──────────────────────────────────────────────────────
+    reranker_model:   str  = Field("BAAI/bge-reranker-v2-m3", description="Reranker 模型")
+    reranker_device:  str  = Field("cpu",  description="Reranker 设备: cpu / cuda")
+    reranker_enabled: bool = Field(True,   description="是否启用 Reranker")
+    
     # ── LLM ──────────────────────────────────────────────────────────
     llm_provider: str = Field("openai", description="openai / ollama")
     llm_api_base: str = Field("", description="LLM API 地址")
@@ -86,5 +98,14 @@ class Settings(BaseSettings):
         from pathlib import Path
         return Path(self.got_ocr_model).exists()
 
+    @property
+    def redis_broker_url(self) -> str:
+        auth = f":{self.redis_password}@" if self.redis_password else ""
+        return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db_broker}"
+
+    @property
+    def redis_backend_url(self) -> str:
+        auth = f":{self.redis_password}@" if self.redis_password else ""
+        return f"redis://{auth}{self.redis_host}:{self.redis_port}/{self.redis_db_backend}"
 # 全局单例，项目任意位置 from config.settings import settings 即可使用
 settings = Settings()

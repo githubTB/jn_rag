@@ -59,7 +59,6 @@ async def lifespan(app: FastAPI):
                 settings.milvus_host, settings.milvus_port, settings.milvus_collection)
     logger.info("  embedding  : %s @ %s", settings.embedding_model, settings.embedding_device)
     logger.info("  vl_backend : %s", settings.vl_backend or "本地CPU")
-    logger.info("  got_ocr    : %s", settings.got_ocr_model or "未部署")
     yield
     logger.info("服务关闭")
 
@@ -92,7 +91,7 @@ if (STATIC_DIR / "assets").exists():
 async def health():
     from core.dedup import Dedup
     from config.settings import settings
-
+    
     stats = Dedup.stats()
 
     milvus_ok = False
@@ -119,6 +118,8 @@ async def health():
         "got_ocr_ready": settings.got_ocr_available,
         "stats":         stats,
         "vector_count":  vector_count,
+        "reranker_model":   settings.reranker_model,
+        "reranker_enabled": settings.reranker_enabled,
     }
 
 
