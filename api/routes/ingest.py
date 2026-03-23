@@ -1,10 +1,22 @@
 """
-api/routes/ingest.py 里 scan 接口的改动部分。
+api/routes/ingest.py — 完整版，含所有接口。
 
-把原来的 BackgroundTasks 替换成 Celery 任务。
-其他接口（upload/folder、单文件入库、企业管理等）不变。
+接口列表
+--------
+POST   /api/upload/folder                  文件夹批量上传（保持目录结构，不触发入库）
+POST   /api/ingest                         单文件上传入库
+POST   /api/ingest/scan/{company_id}       扫描目录批量入库（Celery 异步队列）
+GET    /api/ingest/status/{file_id}        查询入库状态
+GET    /api/task/{task_id}                 查询 Celery 任务状态
+GET    /api/files                          已入库文件列表
+DELETE /api/files/{file_id}                删除文件
+PATCH  /api/files/{file_id}/doc_type       人工修改文件类型
+POST   /api/files/{file_id}/reprocess      重新处理文件
 
-只需替换 scan_company_dir 函数。
+POST   /api/companies                      创建企业
+GET    /api/companies                      企业列表
+GET    /api/companies/{company_id}         企业详情
+DELETE /api/companies/{company_id}         删除企业
 """
 
 from __future__ import annotations
@@ -34,7 +46,127 @@ _MAX_UPLOAD_MB = 50
 
 
 # ---------------------------------------------------------------------------
-# POST /api/ingest/scan/{company_id} — 扫描目录，用 Celery 异步入库
+# POST /api/upload/folder — 文件夹批量上传，保持目录结构，不触发入库
+# ---------------------------------------------------------------------------
+
+@router.post("/upload/folder")
+async def upload_folder(
+    files: list[UploadFile] = File(...),
+    relative_paths: list[str] = Form(...),
+    company_id: str = Form(...),
+    company_name: str = Form(...),
+):
+    """
+    上传整个文件夹，保持目录结构，只保存不入库。
+    入库请调用 POST /api/ingest/scan/{company_id}
+    """
+    if len(files) != len(relative_paths):
+        raise HTTPException(status_code=400, detail="files 和 relative_paths 数量不一致")
+
+    Dedup.register_company(company_id, company_name)
+    logger.info("[Upload] 企业: %s (%s)  文件数: %d", company_name, company_id, len(files))
+
+    base_dir = Path(settings.upload_dir) / company_id
+    saved, skipped_list = [], []
+
+    for file, rel_path in zip(files, relative_paths):
+        parts = Path(rel_path).parts
+        safe_rel = Path(*parts[1:]) if len(parts) > 1 else Path(parts[0])
+
+        ext = safe_rel.suffix.lower()
+        if ext not in _ALLOWED_EXTENSIONS:
+            skipped_list.append(str(safe_rel))
+            continue
+
+        content = await file.read()
+        size_mb = len(content) / 1024 / 1024
+        if size_mb > _MAX_UPLOAD_MB:
+            skipped_list.append(str(safe_rel))
+            logger.warning("[Upload] 文件过大跳过: %s (%.1fMB)", safe_rel, size_mb)
+            continue
+
+        save_path = base_dir / safe_rel
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path.write_bytes(content)
+        saved.append({"file": str(safe_rel), "size_mb": round(size_mb, 2)})
+
+    logger.info("[Upload] 完成: 保存 %d 个，跳过 %d 个", len(saved), len(skipped_list))
+
+    return JSONResponse({
+        "status":        "uploaded",
+        "company_id":    company_id,
+        "company_name":  company_name,
+        "saved":         len(saved),
+        "skipped":       len(skipped_list),
+        "files":         saved,
+        "skipped_files": skipped_list,
+        "message":       f"上传完成，共 {len(saved)} 个文件。点击「开始入库」处理。",
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/ingest — 单文件上传入库
+# ---------------------------------------------------------------------------
+
+@router.post("/ingest")
+async def ingest(
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    company_id: str | None = None,
+    doc_type: str | None = None,
+    sync: bool = False,
+):
+    if company_id and not Dedup.get_company(company_id):
+        raise HTTPException(status_code=404,
+            detail=f"企业不存在: {company_id}，请先通过 POST /api/companies 创建")
+
+    if doc_type is None:
+        doc_type = _guess_doc_type(Path(file.filename or "unknown"))
+    elif doc_type not in DocType.ALL:
+        raise HTTPException(status_code=400,
+            detail=f"无效的 doc_type: {doc_type}，可选: {', '.join(sorted(DocType.ALL))}")
+
+    filename = file.filename or "unknown"
+    ext = Path(filename).suffix.lower()
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=415, detail=f"不支持的文件格式: {ext}")
+
+    upload_dir = Path(settings.upload_dir)
+    if company_id:
+        upload_dir = upload_dir / company_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    save_path = upload_dir / filename
+    counter = 1
+    while save_path.exists():
+        save_path = upload_dir / f"{Path(filename).stem}_{counter}{ext}"
+        counter += 1
+
+    content = await file.read()
+    size_mb = len(content) / 1024 / 1024
+    if size_mb > _MAX_UPLOAD_MB:
+        raise HTTPException(status_code=413, detail=f"文件过大: {size_mb:.1f} MB")
+    save_path.write_bytes(content)
+
+    file_id = Dedup.hash_file(save_path)
+    if not Dedup.is_file_new(save_path):
+        save_path.unlink(missing_ok=True)
+        existing = Dedup.get_file(file_id) or {}
+        return JSONResponse({"status": "skipped", "reason": "文件内容已入库",
+                             "file_id": file_id, "file": existing.get("filename", filename)})
+
+    kwargs = dict(company_id=company_id, doc_type=doc_type)
+    if sync:
+        result = IngestTask.run(str(save_path), **kwargs)
+        return JSONResponse(result)
+    else:
+        background_tasks.add_task(IngestTask.run, str(save_path), **kwargs)
+        return JSONResponse({"status": "processing", "file_id": file_id,
+                             "file": save_path.name, "message": "文件已上传，正在后台处理"},
+                            status_code=202)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/ingest/scan/{company_id} — 扫描目录，Celery 异步队列
 # ---------------------------------------------------------------------------
 
 @router.post("/ingest/scan/{company_id}")
@@ -43,12 +175,6 @@ async def scan_company_dir(
     doc_type: str | None = None,
     sync: bool = False,
 ):
-    """
-    扫描企业目录下所有文件并入库。
-
-    sync=false（默认）：把任务推入 Celery 队列，立即返回 task_id
-    sync=true         ：等待 Celery 任务完成再返回（调试用，文件多时慢）
-    """
     if not Dedup.get_company(company_id):
         raise HTTPException(status_code=404, detail=f"企业不存在: {company_id}")
 
@@ -56,7 +182,6 @@ async def scan_company_dir(
     if not scan_dir.exists():
         raise HTTPException(status_code=404, detail=f"目录不存在: {scan_dir}")
 
-    # 收集文件
     all_files: list[Path] = []
     for f in scan_dir.rglob("*"):
         if not f.is_file():
@@ -68,8 +193,7 @@ async def scan_company_dir(
         prepared = _prepare_doc(f)
         if prepared is None:
             continue
-        supported = _ALLOWED_EXTENSIONS | {".doc", ".docm"}
-        if f.suffix.lower() not in supported:
+        if f.suffix.lower() not in (_ALLOWED_EXTENSIONS | {".doc", ".docm"}):
             continue
         all_files.append(prepared)
 
@@ -77,31 +201,52 @@ async def scan_company_dir(
         return JSONResponse({"status": "empty", "company_id": company_id,
                              "message": "目录下没有找到支持的文件"})
 
-    tasks = [
-        {"path": str(f), "doc_type": doc_type or _guess_doc_type(f)}
-        for f in all_files
-    ]
+    tasks = [{"path": str(f), "doc_type": doc_type or _guess_doc_type(f)}
+             for f in all_files]
 
-    # 导入 Celery 任务
     from core.tasks_celery import ingest_batch
 
     if sync:
-        # 同步等待（调试用）
         result = ingest_batch.apply(args=[tasks, company_id]).get(timeout=3600)
         return JSONResponse(result)
     else:
-        # 异步推队列，立即返回 task_id
         job = ingest_batch.apply_async(args=[tasks, company_id], queue="ingest")
-        logger.info("[Scan] 已推入队列: company=%s  files=%d  task_id=%s",
+        logger.info("[Scan] 推入队列: company=%s  files=%d  task_id=%s",
                     company_id, len(tasks), job.id)
         return JSONResponse({
-            "status":    "queued",
-            "task_id":   job.id,
+            "status":     "queued",
+            "task_id":    job.id,
             "company_id": company_id,
-            "total":     len(tasks),
-            "files":     [{"file": Path(t["path"]).name, "doc_type": t["doc_type"]} for t in tasks],
-            "message":   f"已提交 {len(tasks)} 个文件到队列，Worker 正在处理",
+            "total":      len(tasks),
+            "files":      [{"file": Path(t["path"]).name, "doc_type": t["doc_type"]} for t in tasks],
+            "message":    f"已提交 {len(tasks)} 个文件到队列，Worker 正在处理",
         }, status_code=202)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/ingest/status/{file_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/ingest/status/{file_id}")
+async def ingest_status(file_id: str):
+    record = Dedup.get_file(file_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    resp = {
+        "file_id":            record["id"],
+        "filename":           record["filename"],
+        "company_id":         record["company_id"],
+        "doc_type":           record["doc_type"],
+        "doc_type_confirmed": bool(record.get("doc_type_confirmed", 0)),
+        "status":             record["status"],
+        "created_at":         record["created_at"],
+    }
+    if record["status"] == "done":
+        try:
+            resp["total_vectors"] = Embedder.count()
+        except Exception:
+            pass
+    return JSONResponse(resp)
 
 
 # ---------------------------------------------------------------------------
@@ -110,27 +255,228 @@ async def scan_company_dir(
 
 @router.get("/task/{task_id}")
 async def get_task_status(task_id: str):
-    """查询任务处理进度。"""
     from celery_app import app as celery_app
     from celery.result import AsyncResult
 
     result = AsyncResult(task_id, app=celery_app)
-
-    resp = {
-        "task_id": task_id,
-        "status":  result.status,   # PENDING / STARTED / SUCCESS / FAILURE / RETRY
-    }
-
+    resp = {"task_id": task_id, "status": result.status}
     if result.successful():
         resp["result"] = result.result
     elif result.failed():
         resp["error"] = str(result.result)
-
     return JSONResponse(resp)
 
 
 # ---------------------------------------------------------------------------
-# 工具函数（保持不变）
+# GET /api/files
+# ---------------------------------------------------------------------------
+
+@router.get("/files")
+async def list_files(
+    status: str | None = None,
+    company_id: str | None = None,
+    doc_type: str | None = None,
+):
+    files = Dedup.list_files(status=status, company_id=company_id, doc_type=doc_type)
+    return JSONResponse({
+        "total": len(files),
+        "files": [{
+            "file_id":            f["id"][:16] + "..",
+            "filename":           f["filename"],
+            "company_id":         f["company_id"],
+            "doc_type":           f["doc_type"],
+            "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
+            "status":             f["status"],
+            "created_at":         f["created_at"],
+        } for f in files],
+    })
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/files/{file_id}
+# ---------------------------------------------------------------------------
+
+@router.delete("/files/{file_id}")
+async def delete_file(file_id: str):
+    record = Dedup.get_file(file_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    try:
+        Embedder.delete_by_file(file_id)
+    except Exception as e:
+        logger.warning("[Ingest] Milvus 删除失败: %s", e)
+    Dedup.delete_file(file_id)
+    return JSONResponse({"status": "deleted", "file_id": file_id,
+                         "filename": record["filename"]})
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/files/{file_id}/doc_type
+# ---------------------------------------------------------------------------
+
+class DocTypeUpdate(BaseModel):
+    doc_type: str
+    confirmed: bool = True
+
+
+@router.patch("/files/{file_id}/doc_type")
+async def update_doc_type(file_id: str, body: DocTypeUpdate):
+    if body.doc_type not in DocType.ALL:
+        raise HTTPException(status_code=400,
+            detail=f"无效的 doc_type: {body.doc_type}，可选: {', '.join(sorted(DocType.ALL))}")
+
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]; file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    old_type = record["doc_type"]
+    if not Dedup.update_doc_type(file_id, body.doc_type, confirmed=body.confirmed):
+        raise HTTPException(status_code=404, detail="文件不存在")
+
+    return JSONResponse({
+        "status":             "updated",
+        "file_id":            file_id,
+        "filename":           record["filename"],
+        "doc_type_old":       old_type,
+        "doc_type_new":       body.doc_type,
+        "doc_type_confirmed": body.confirmed,
+        "message":            "doc_type 已更新，如需重新解析请调用 reprocess 接口",
+    })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/files/{file_id}/reprocess
+# ---------------------------------------------------------------------------
+
+@router.post("/files/{file_id}/reprocess")
+async def reprocess_file(
+    file_id: str,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    sync: bool = False,
+):
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]; file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    file_path = Path(record["file_path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404,
+            detail=f"原始文件不存在: {file_path}，无法重新处理")
+
+    try:
+        Embedder.delete_by_file(file_id)
+    except Exception as e:
+        logger.warning("[Reprocess] Milvus 删除失败: %s", e)
+
+    deleted_chunks = Dedup.delete_chunks_by_file(file_id)
+
+    with Dedup._get_conn_ctx() as conn:
+        conn.execute("UPDATE files SET status = 'pending' WHERE id = ?", (file_id,))
+
+    kwargs = dict(company_id=record["company_id"], doc_type=record["doc_type"], force=True)
+
+    if sync:
+        result = IngestTask.run(str(file_path), **kwargs)
+        return JSONResponse({**result, "reprocessed": True,
+                             "deleted_chunks": deleted_chunks})
+    else:
+        background_tasks.add_task(IngestTask.run, str(file_path), **kwargs)
+        return JSONResponse({
+            "status":         "processing",
+            "file_id":        file_id,
+            "filename":       record["filename"],
+            "doc_type":       record["doc_type"],
+            "deleted_chunks": deleted_chunks,
+            "reprocessed":    True,
+            "message":        "已清除旧数据，正在后台重新处理",
+        }, status_code=202)
+
+
+# ---------------------------------------------------------------------------
+# 企业管理
+# ---------------------------------------------------------------------------
+
+class CompanyCreate(BaseModel):
+    company_id: str
+    name: str
+
+
+@router.post("/companies", status_code=201)
+async def create_company(body: CompanyCreate):
+    Dedup.register_company(body.company_id, body.name)
+    return JSONResponse({"status": "ok", "company_id": body.company_id,
+                         "name": body.name}, status_code=201)
+
+
+@router.get("/companies")
+async def list_companies():
+    companies = Dedup.list_companies()
+    result = []
+    for c in companies:
+        files = Dedup.list_files(company_id=c["id"])
+        result.append({
+            "company_id":      c["id"],
+            "name":            c["name"],
+            "created_at":      c["created_at"],
+            "file_count":      len(files),
+            "done_count":      sum(1 for f in files if f["status"] == "done"),
+            "confirmed_count": sum(1 for f in files if f.get("doc_type_confirmed")),
+        })
+    return JSONResponse({"total": len(result), "companies": result})
+
+
+@router.get("/companies/{company_id}")
+async def get_company(company_id: str):
+    company = Dedup.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    files = Dedup.list_files(company_id=company_id)
+    return JSONResponse({
+        "company_id": company["id"],
+        "name":       company["name"],
+        "created_at": company["created_at"],
+        "files": [{
+            "file_id":            f["id"],
+            "filename":           f["filename"],
+            "doc_type":           f["doc_type"],
+            "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
+            "status":             f["status"],
+        } for f in files],
+    })
+
+
+@router.delete("/companies/{company_id}")
+async def delete_company(company_id: str):
+    company = Dedup.get_company(company_id)
+    if not company:
+        raise HTTPException(status_code=404, detail="企业不存在")
+    files = Dedup.list_files(company_id=company_id)
+    for f in files:
+        try:
+            Embedder.delete_by_file(f["id"])
+        except Exception as e:
+            logger.warning("[Ingest] Milvus 删除失败: %s", e)
+    deleted = Dedup.delete_company(company_id)
+    return JSONResponse({"status": "deleted", "company_id": company_id,
+                         "name": company["name"], "files_deleted": deleted})
+
+
+# ---------------------------------------------------------------------------
+# 工具函数
 # ---------------------------------------------------------------------------
 
 _PATH_RULES: list[tuple[list[str], str]] = [
@@ -171,3 +517,4 @@ def _prepare_doc(file_path: Path) -> Path | None:
             return None
         return file_path
     return file_path
+    
