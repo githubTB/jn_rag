@@ -126,17 +126,21 @@ class PdfExtractor(BaseExtractor):
         return docs
 
     def _ocr_image(self, img_path: str, page_num: int) -> list[Document]:
-        """单页图片走 OCR 路由，结果打上页码 metadata。"""
         from extractor.ocr_router import route_ocr
+        from config.settings import settings
 
-        # 扫描件 PDF 大概率是文档，用 doc_type 路由（document → PP-OCRv4 或 VL）
+        vl_kwargs = {}
+        if settings.vl_backend:
+            vl_kwargs["vl_rec_backend"] = settings.vl_backend
+        if settings.vl_server_url:
+            vl_kwargs["vl_rec_server_url"] = settings.vl_server_url
+
         try:
-            page_docs = route_ocr(img_path, doc_type=self._doc_type, **self._vl_kwargs)
+            page_docs = route_ocr(img_path, doc_type=self._doc_type, **vl_kwargs)
         except Exception as exc:
             logger.error("[PDF] 第 %d 页 OCR 失败: %s", page_num, exc)
             return []
 
-        # 把 source 改回 PDF 路径，加页码
         for doc in page_docs:
             doc.metadata["source"] = self._file_path
             doc.metadata["page"] = page_num
