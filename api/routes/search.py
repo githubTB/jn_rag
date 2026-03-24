@@ -18,6 +18,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from config.settings import settings
+from services.mcp_service import (
+    DEFAULT_EXTRACT_PROMPT_SERVICE,
+    get_service,
+)
 from core.dedup import Dedup, DocType
 from core.embedder import Embedder
 from core.reranker import Reranker
@@ -100,43 +104,10 @@ _RECALL_MULTIPLIER = 3
 # 向量粗筛阈值（比 /search 放宽，让 Reranker 有更多候选）
 _RECALL_THRESHOLD  = 0.2
 
-_DEFAULT_EXTRACT_SYSTEM_PROMPT = (
-    "你是一个数据提取分析师，基于提供的文本，提取出其中的数值信息和关联数值信息。"
-)
-
-_DEFAULT_EXTRACT_USER_TEMPLATE = """
-任务：从文本中抽取企业信息并输出JSON。
-
-字段：
-    company_name 企业名称
-    company_credit_code 统一社会信用代码
-    company_registered_type 注册类型
-    company_registered_capital 注册资本
-    company_registered_address 注册地址
-    company_establishment_date 成立日期
-    company_legal_representative 企业法定代表人
-    company_office_address 办公地址
-    company_contact_phone 联系电话
-    company_contact_email 联系邮箱
-    company_industry 行业分类
-    company_region_code 注册企业区名称
-    company_remark 备注
-    revenue 营业收入（数字）
-    net_profit 净利润（数字）
-    listed_status 是否上市（是/否）
-
-输出：
-    JSON对象
-
-要求：
-    - 不要解释
-    - 不要markdown
-    - 不要换行格式化
-    - 缺失字段为null
-
-文本：
-{text}
-""".strip()
+_DEFAULT_EXTRACT_PROMPT = get_service(DEFAULT_EXTRACT_PROMPT_SERVICE)
+_DEFAULT_EXTRACT_Q = _DEFAULT_EXTRACT_PROMPT.q
+_DEFAULT_EXTRACT_SYSTEM_PROMPT = _DEFAULT_EXTRACT_PROMPT.system_prompt
+_DEFAULT_EXTRACT_USER_TEMPLATE = _DEFAULT_EXTRACT_PROMPT.user_prompt
 
 _PROMOTER_SERVICE_PRESETS: dict[str, dict[str, str]] = {
     "default": {
@@ -147,7 +118,7 @@ _PROMOTER_SERVICE_PRESETS: dict[str, dict[str, str]] = {
 
 
 class QueryExtractRequest(BaseModel):
-    q: str = Field(..., min_length=1, description="检索问题/抽取主题")
+    q: str = Field(_DEFAULT_EXTRACT_Q, min_length=1, description="检索问题/抽取主题")
     top_k: int = Field(5, ge=1, le=20, description="最终保留条数")
     score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="向量检索最低相似度")
     company_id: str | None = Field(None, description="限定企业范围")
