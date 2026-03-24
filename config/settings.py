@@ -68,14 +68,20 @@ class Settings(BaseSettings):
     milvus_collection: str = Field("rag_docs", description="集合名称")
 
     # ── Embedding ─────────────────────────────────────────────────────
+    embedding_provider: str = Field("local", description="local / remote")
     embedding_model: str = Field("BAAI/bge-m3", description="向量模型名称")
     embedding_device: str = Field("cpu", description="向量模型推理设备")
     embedding_batch_size: int = Field(32, description="批量向量化大小")
+    embedding_api_base: str = Field("", description="远程 embedding API 地址")
+    embedding_api_key: str = Field("", description="远程 embedding API Key")
 
     # ── Reranker ──────────────────────────────────────────────────────
+    reranker_provider: str  = Field("local", description="local / remote")
     reranker_model:   str  = Field("BAAI/bge-reranker-v2-m3", description="Reranker 模型")
     reranker_device:  str  = Field("cpu",  description="Reranker 设备: cpu / cuda")
     reranker_enabled: bool = Field(True,   description="是否启用 Reranker")
+    reranker_api_base: str = Field("", description="远程 reranker API 地址")
+    reranker_api_key: str = Field("", description="远程 reranker API Key")
     
     # ── LLM ──────────────────────────────────────────────────────────
     llm_provider: str = Field("openai", description="openai / ollama")

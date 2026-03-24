@@ -111,6 +111,8 @@ async def health():
         "collection":    settings.milvus_collection,
         "embed_model":   settings.embedding_model,
         "embed_device":  settings.embedding_device,
+        "reranker_model":   settings.reranker_model,
+        "reranker_enabled": settings.reranker_enabled,
         "llm_model":     settings.llm_model,
         "llm_api_base":  settings.llm_api_base,
         "vl_backend":    settings.vl_backend or "local_cpu",
@@ -118,8 +120,6 @@ async def health():
         "got_ocr_ready": settings.got_ocr_available,
         "stats":         stats,
         "vector_count":  vector_count,
-        "reranker_model":   settings.reranker_model,
-        "reranker_enabled": settings.reranker_enabled,
     }
 
 

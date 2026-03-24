@@ -1,4 +1,5 @@
 import os
+from zipfile import BadZipFile
 from typing import TypedDict
 
 import pandas as pd
@@ -21,9 +22,16 @@ class ExcelExtractor(BaseExtractor):
     def extract(self) -> list[Document]:
         documents: list[Document] = []
         ext = os.path.splitext(self._file_path)[-1].lower()
-
-        if ext == ".xlsx":
-            wb = load_workbook(self._file_path, read_only=True, data_only=True)
+        detected = self._detect_excel_format()
+        
+        if detected == "xlsx":
+            try:
+                wb = load_workbook(self._file_path, read_only=True, data_only=True)
+            except BadZipFile as exc:
+                raise ValueError(
+                    f"Excel 文件扩展名为 {ext}，但文件内容不是合法的 xlsx 压缩包: "
+                    f"{os.path.basename(self._file_path)}"
+                ) from exc
             try:
                 for sheet_name in wb.sheetnames:
                     sheet = wb[sheet_name]
@@ -55,7 +63,7 @@ class ExcelExtractor(BaseExtractor):
             finally:
                 wb.close()
 
-        elif ext == ".xls":
+        elif detected == "xls":
             excel_file = pd.ExcelFile(self._file_path, engine="xlrd")
             for sheet_name in excel_file.sheet_names:
                 df = excel_file.parse(sheet_name=sheet_name)
@@ -68,10 +76,44 @@ class ExcelExtractor(BaseExtractor):
                             metadata={"source": self._file_path, "sheet": sheet_name},
                         )
                     )
+        elif detected == "html":
+            tables = pd.read_html(self._file_path)
+            for idx, df in enumerate(tables, start=1):
+                df.dropna(how="all", inplace=True)
+                for _, row in df.iterrows():
+                    parts = [f'"{k}":"{v}"' for k, v in row.items() if pd.notna(v)]
+                    if parts:
+                        documents.append(
+                            Document(
+                                page_content="; ".join(parts),
+                                metadata={"source": self._file_path, "sheet": f"table_{idx}"},
+                            )
+                        )
         else:
-            raise ValueError(f"Unsupported file extension: {ext}")
+            raise ValueError(f"不支持的 Excel 文件格式: ext={ext}, file={os.path.basename(self._file_path)}。"
+    " 文件可能并不是真正的 Excel，或扩展名与实际内容不一致。")
 
         return documents
+
+    def _detect_excel_format(self) -> str | None:
+        with open(self._file_path, "rb") as f:
+            magic = f.read(512)
+
+        if magic.startswith(b"PK\x03\x04"):
+            return "xlsx"
+        if magic.startswith(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1"):
+            return "xls"
+            
+        head = magic.lstrip().lower()
+        if head.startswith(b"<html") or head.startswith(b"<!doctype html"):
+            return "html"
+
+        ext = os.path.splitext(self._file_path)[-1].lower()
+        if ext == ".xlsx":
+            return "xlsx"
+        if ext == ".xls":
+            return "xls"
+        return None
 
     def _find_header(self, sheet, scan_rows: int = 10) -> tuple[int, dict[int, str], int]:
         candidates: list[_Candidate] = []

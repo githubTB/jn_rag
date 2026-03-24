@@ -31,6 +31,9 @@ _model: Any | None = None
 
 
 def _get_model():
+    if settings.embedding_provider.lower() == "remote":
+        return None
+
     global _model
     if _model is None:
         try:
@@ -144,13 +147,18 @@ class Embedder:
         # 向量化用纯文本内容（已去掉HTML标签）
         texts = [_html_to_plain(c.page_content) for c in chunks]
         logger.info("[Embedder] 向量化 %d 个 chunk，batch_size=%d", len(texts), bs)
-        vectors = _get_model().encode(texts, batch_size=bs)
-        result  = vectors.tolist()
+        if settings.embedding_provider.lower() == "remote":
+            result = cls._embed_remote(texts)
+        else:
+            vectors = _get_model().encode(texts, batch_size=bs)
+            result  = vectors.tolist()
         logger.info("[Embedder] 完成，维度=%d", len(result[0]) if result else 0)
         return result
 
     @classmethod
     def embed_query(cls, query: str) -> list[float]:
+        if settings.embedding_provider.lower() == "remote":
+            return cls._embed_remote([query])[0]
         vectors = _get_model().encode_queries([query])
         return vectors[0].tolist()
 
@@ -252,3 +260,24 @@ class Embedder:
     @classmethod
     def count(cls) -> int:
         return _get_collection().num_entities
+
+    @classmethod
+    def _embed_remote(cls, texts: list[str]) -> list[list[float]]:
+        if not settings.embedding_api_base:
+            raise RuntimeError("EMBEDDING_PROVIDER=remote 时必须配置 EMBEDDING_API_BASE")
+
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise ImportError("远程 embedding 需要安装 openai: pip install openai") from exc
+
+        client = OpenAI(
+            base_url=settings.embedding_api_base,
+            api_key=settings.embedding_api_key or "EMPTY",
+        )
+
+        response = client.embeddings.create(
+            model=settings.embedding_model,
+            input=texts,
+        )
+        return [item.embedding for item in response.data]

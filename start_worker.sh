@@ -20,10 +20,13 @@ source venv/bin/activate
 celery -A celery_app worker \
     --loglevel=info \
     --concurrency=2 \
+    --pool=solo \
+    --concurrency=1 \
     -Q ingest \
     --logfile=logs/celery_worker.log \
     --pidfile=logs/celery_worker.pid \
     --detach
+
 
 echo "Worker 已在后台启动"
 echo "查看日志: tail -f logs/celery_worker.log"

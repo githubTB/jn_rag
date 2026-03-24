@@ -20,7 +20,11 @@ from __future__ import annotations
 
 import logging
 import os
+import urllib.request
+import json
 from typing import Any
+
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +36,9 @@ _reranker: Any | None = None
 
 
 def _get_reranker():
+    if settings.reranker_provider.lower() == "remote":
+        return None
+
     global _reranker
     if _reranker is not None:
         return _reranker
@@ -61,7 +68,7 @@ def reset_reranker() -> None:
 
 
 def _is_enabled() -> bool:
-    return os.environ.get("RERANKER_ENABLED", "true").lower() not in ("false", "0", "no")
+    return str(settings.reranker_enabled).lower() not in ("false", "0", "no")
 
 
 # ---------------------------------------------------------------------------
@@ -109,16 +116,7 @@ class Reranker:
             return hits[:top_n]
 
         try:
-            reranker = _get_reranker()
-        except Exception as exc:
-            logger.warning("[Reranker] 加载失败，降级返回向量检索结果: %s", exc)
-            return hits[:top_n]
-
-        # 构造 (query, passage) 对
-        pairs = [[query, h.get("content", "")] for h in hits]
-
-        try:
-            scores = reranker.compute_score(pairs, normalize=True)
+            scores = cls._compute_scores(query, hits)
         except Exception as exc:
             logger.warning("[Reranker] 打分失败，降级返回向量检索结果: %s", exc)
             return hits[:top_n]
@@ -150,7 +148,53 @@ class Reranker:
         if not _is_enabled():
             return False
         try:
+            if settings.reranker_provider.lower() == "remote":
+                return bool(settings.reranker_api_base)
             _get_reranker()
             return True
         except Exception:
             return False
+
+    @classmethod
+    def _compute_scores(cls, query: str, hits: list[dict]) -> list[float]:
+        if settings.reranker_provider.lower() == "remote":
+            return cls._compute_scores_remote(query, hits)
+
+        try:
+            reranker = _get_reranker()
+        except Exception as exc:
+            raise RuntimeError(f"加载本地 Reranker 失败: {exc}") from exc
+
+        pairs = [[query, h.get("content", "")] for h in hits]
+        scores = reranker.compute_score(pairs, normalize=True)
+        if isinstance(scores, (int, float)):
+            return [float(scores)]
+        return [float(s) for s in scores]
+
+    @classmethod
+    def _compute_scores_remote(cls, query: str, hits: list[dict]) -> list[float]:
+        if not settings.reranker_api_base:
+            raise RuntimeError("RERANKER_PROVIDER=remote 时必须配置 RERANKER_API_BASE")
+
+        url = settings.reranker_api_base.rstrip("/") + "/rerank"
+        payload = {
+            "model": settings.reranker_model,
+            "query": query,
+            "documents": [h.get("content", "") for h in hits],
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                **({"Authorization": f"Bearer {settings.reranker_api_key}"} if settings.reranker_api_key else {}),
+            },
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        if isinstance(data, dict) and "results" in data:
+            return [float(item.get("relevance_score", item.get("score", 0))) for item in data["results"]]
+        if isinstance(data, dict) and "data" in data:
+            return [float(item.get("relevance_score", item.get("score", 0))) for item in data["data"]]
+        raise RuntimeError(f"远程 rerank 返回格式不支持: {data}")

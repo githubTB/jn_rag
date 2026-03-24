@@ -8,7 +8,11 @@ client = OpenAI(
 
 start_time = time.time()
 
-prompt = """
+system_prompt = """
+你是一个专业的用地集约化潜力分析助手，负责根据企业提供的基本信息，撰写企业用地集约化潜力分析描述。
+"""
+
+user_prompt = """
 请基于提供的企业，按照以下结构和要求，撰写企业用地集约化潜力分析描述：
 【铝型材企业基本信息】
 
@@ -53,11 +57,37 @@ prompt = """
 
 """
 
+system_prompt = """
+你是一个数据提取分析师，基于提供的文本，提取出其中的数值信息。
+"""
+
+user_prompt = f"""
+任务：从文本中抽取企业信息并输出JSON。
+
+字段：
+    company_name 企业名称
+    credit_code 统一社会信用代码
+    revenue 营业收入（数字）
+    net_profit 净利润（数字）
+    listed_status 是否上市（是/否）
+
+输出：
+    JSON对象
+
+要求：
+    - 不要解释
+    - 不要markdown
+    - 不要换行格式化
+    - 缺失字段为null
+
+文本：
+    {text}
+"""
 response = client.chat.completions.create(
     model="any",
     messages=[
-        {"role": "system", "content": "你是一个专业的工业企业绿色生产水平评估专家，擅长计算企业建筑容积率、建筑密度，根据《工业项目建设用地控制指标》（2023版）对企业用地集约化进行潜力分析。区域是中国重庆"},
-        {"role": "user", "content": prompt}
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
     ],
     max_tokens=2000,
     extra_body={"chat_template_kwargs": {"enable_thinking": False}}

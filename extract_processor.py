@@ -70,6 +70,7 @@ _EXT_MAP: dict[str, type[BaseExtractor]] = {
     # Documents
     ".pdf":      PdfExtractor,
     ".docx":     WordExtractor,
+    ".docm":     WordExtractor,
     # Presentations
     ".pptx":     PptxExtractor,
     # Images (Tesseract OCR)
