@@ -213,6 +213,24 @@ def _retrieve_hits(
     if not hits:
         return [], False
 
+    if prefer_source:
+        keyword = prefer_source.strip().lower()
+        if keyword:
+            preferred_hits = [
+                h for h in hits
+                if keyword in ((h.get("source") or "").split("/")[-1].lower())
+            ]
+            if preferred_hits:
+                logger.info(
+                    "[Query] prefer_source 命中 %d/%d，启用文件内硬过滤: %r",
+                    len(preferred_hits),
+                    len(hits),
+                    prefer_source,
+                )
+                hits = preferred_hits
+            else:
+                logger.info("[Query] prefer_source 未命中，回退全量候选: %r", prefer_source)
+
     logger.info("[Query] 向量粗筛: %d 条候选", len(hits))
     reranker_used = Reranker.is_available()
     rerank_top_n = len(hits) if prefer_source else top_k
@@ -220,14 +238,8 @@ def _retrieve_hits(
     if prefer_source:
         keyword = prefer_source.strip().lower()
         if keyword:
-            hits.sort(
-                key=lambda h: (
-                    keyword in ((h.get("source") or "").split("/")[-1].lower()),
-                    h.get("rerank_score", h.get("score", 0)),
-                ),
-                reverse=True,
-            )
-            logger.info("[Query] 已应用 prefer_source 加权: %r", prefer_source)
+            # 双保险：在硬过滤后保留稳定排序逻辑
+            hits.sort(key=lambda h: h.get("rerank_score", h.get("score", 0)), reverse=True)
         hits = hits[:top_k]
     logger.info("[Query] 精排后: %d 条", len(hits))
     _log_matched_sources(hits)
