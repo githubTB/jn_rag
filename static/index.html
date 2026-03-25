@@ -37,6 +37,7 @@ nav{display:flex;gap:2px}
 .ch .ic{color:var(--accent);font-size:0.95rem}
 .cb{padding:18px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.g2.companies-layout{grid-template-columns:minmax(280px,1fr) minmax(0,3fr)}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 @media(max-width:860px){.g2{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
@@ -203,10 +204,10 @@ nav{display:flex;gap:2px}
 
 <!-- 企业管理 -->
 <div class="view" id="view-companies">
-  <div class="g2">
+  <div class="g2 companies-layout">
 
     <!-- 左侧：新建企业 + 文件夹上传 -->
-    <div>
+    <div id="create-company-panel">
       <div class="card">
         <div class="ch"><span class="ic">➕</span>新建企业并上传资料</div>
         <div class="cb">
@@ -270,14 +271,9 @@ nav{display:flex;gap:2px}
             <div class="step-content">
               <div style="font-weight:600;font-size:.85rem;margin-bottom:4px">开始入库</div>
               <div style="font-size:.78rem;color:var(--ink-muted);margin-bottom:8px">文件上传完成后，点击开始解析并写入知识库</div>
-              <div style="display:flex;gap:8px">
-                <button class="btn btn-p" style="flex:1" id="scan-async-btn" onclick="doNewScan(false)" disabled>
-                  🚀 异步入库
-                </button>
-                <button class="btn btn-g" style="flex:1" id="scan-sync-btn" onclick="doNewScan(true)" disabled>
-                  ⏳ 同步等待
-                </button>
-              </div>
+              <button class="btn btn-p btn-fw" id="scan-async-btn" onclick="doNewScan(false)" disabled>
+                🚀 开始入库
+              </button>
               <div class="slog" id="scan-log"></div>
             </div>
           </div>
@@ -290,7 +286,10 @@ nav{display:flex;gap:2px}
     <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-weight:600;font-size:.95rem">企业列表</span>
-        <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-p btn-sm" onclick="scrollToCreateCompany()">➕ 添加企业</button>
+          <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
+        </div>
       </div>
       <div class="company-grid" id="company-grid">
         <div class="empty"><div class="big">🏢</div>暂无企业</div>
@@ -303,7 +302,6 @@ nav{display:flex;gap:2px}
           <span id="detail-name"></span>
           <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
           <span style="flex:1"></span>
-          <button class="btn btn-d btn-sm" id="detail-del-btn">删除企业</button>
           <button class="btn btn-g btn-sm" onclick="closeDetail()" style="margin-left:6px">关闭</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;padding:8px 12px;font-size:.71rem;font-weight:600;color:var(--ink-muted);border-bottom:1px solid var(--border)">
@@ -318,22 +316,12 @@ nav{display:flex;gap:2px}
         <!-- 再次入库操作 -->
         <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">
           <span style="font-size:.8rem;color:var(--ink-muted);flex:1">重新扫描入库：</span>
-          <button class="btn btn-warn btn-sm" id="rescan-async-btn" onclick="doRescan(false)">🚀 异步入库</button>
-          <button class="btn btn-g btn-sm" id="rescan-sync-btn" onclick="doRescan(true)">⏳ 同步等待</button>
+          <button class="btn btn-warn btn-sm" id="rescan-async-btn" onclick="doRescan(false)">🚀 开始入库</button>
         </div>
         <div class="slog" id="rescan-log" style="margin:0 12px 12px"></div>
       </div>
     </div>
 
-  </div>
-
-  <!-- 知识库管理 -->
-  <div class="card" style="margin-top:14px">
-    <div class="ch"><span class="ic">🗑</span>知识库管理</div>
-    <div class="cb" style="display:flex;align-items:center;gap:16px">
-      <button class="btn btn-d" id="clear-btn">🗑 清空整个知识库</button>
-      <span style="font-size:.78rem;color:var(--ink-muted)">删除全部向量和记录，不可撤销</span>
-    </div>
   </div>
 </div>
 
@@ -348,7 +336,7 @@ nav{display:flex;gap:2px}
       </div>
       <div class="sopts">
         <label>结果数：</label>
-        <select id="q-topk"><option>3</option><option selected>5</option><option>10</option></select>
+        <select id="q-topk"><option>3</option><option selected>5</option><option>10</option><option>20</option><option>50</option><option>100</option></select>
         <label>企业：</label>
         <select id="q-company"><option value="">全部企业</option></select>
         <label>优先文件：</label>
@@ -535,7 +523,6 @@ async function selectCompany(cid) {
     const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
     document.getElementById('detail-confirm-badge').textContent =
       d.files.length ? `已确认 ${confirmed}/${d.files.length}` : '';
-    document.getElementById('detail-del-btn').onclick = () => deleteCompany(cid, d.name);
     renderFileList(d.files||[], cid);
     document.getElementById('company-detail').style.display = 'block';
     document.getElementById('company-detail').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -709,7 +696,6 @@ async function doFolderUpload() {
   // 标记步骤完成，解锁入库按钮
   document.getElementById('step3-badge').className = 'step-badge done';
   document.getElementById('scan-async-btn').disabled = false;
-  document.getElementById('scan-sync-btn').disabled  = false;
   uploadedCompanyId = cid;
 
   btn.disabled = false;
@@ -723,8 +709,7 @@ async function doFolderUpload() {
 async function doNewScan(sync) {
   if (!uploadedCompanyId) { toast('请先上传文件','warning'); return; }
   await _doScan(uploadedCompanyId, sync, 'scan-log',
-    document.getElementById('scan-async-btn'),
-    document.getElementById('scan-sync-btn'));
+    document.getElementById('scan-async-btn'));
   document.getElementById('step4-badge').className = 'step-badge done';
 }
 
@@ -732,13 +717,12 @@ async function doNewScan(sync) {
 async function doRescan(sync) {
   if (!selectedCid) { toast('请先选择企业','warning'); return; }
   await _doScan(selectedCid, sync, 'rescan-log',
-    document.getElementById('rescan-async-btn'),
-    document.getElementById('rescan-sync-btn'));
+    document.getElementById('rescan-async-btn'));
 }
 
-async function _doScan(cid, sync, logId, btnAsync, btnSync) {
+async function _doScan(cid, sync, logId, btnAsync) {
   const log = document.getElementById(logId);
-  btnAsync.disabled = btnSync.disabled = true;
+  btnAsync.disabled = true;
   log.classList.add('on');
   const ts = () => new Date().toLocaleTimeString();
   log.textContent = `[${ts()}] 开始扫描 ${cid}...\n`;
@@ -765,24 +749,15 @@ async function _doScan(cid, sync, logId, btnAsync, btnSync) {
     log.textContent += `\n[错误] ${e.message}\n`;
     toast(e.message,'error');
   } finally {
-    btnAsync.disabled = btnSync.disabled = false;
+    btnAsync.disabled = false;
   }
 }
 
-// ── 清空知识库 ────────────────────────────────────────────────────────────
-document.getElementById('clear-btn').addEventListener('click', async () => {
-  if (!confirm('确定清空整个知识库？\n\n将删除所有向量和记录，不可撤销。')) return;
-  const btn = document.getElementById('clear-btn');
-  btn.disabled=true; btn.innerHTML='<span class="spin">🗑</span> 清空中…';
-  try {
-    for (const c of companies)
-      await fetch(`/api/companies/${c.company_id}`,{method:'DELETE'}).catch(()=>{});
-    await fetch('/api/collection',{method:'DELETE'}).catch(()=>{});
-    toast('知识库已清空','success');
-    await loadCompaniesData(); loadOverview();
-  } catch(e) { toast('失败：'+e.message,'error'); }
-  finally { btn.disabled=false; btn.innerHTML='🗑 清空整个知识库'; }
-});
+function scrollToCreateCompany() {
+  switchView('companies');
+  document.getElementById('create-company-panel')?.scrollIntoView({behavior:'smooth', block:'start'});
+  document.getElementById('new-cid')?.focus();
+}
 
 // ── 智能问答 ──────────────────────────────────────────────────────────────
 async function doSearch() {

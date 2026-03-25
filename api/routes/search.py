@@ -105,6 +105,7 @@ async def search(
 _RECALL_MULTIPLIER = 3
 # 向量粗筛阈值（比 /search 放宽，让 Reranker 有更多候选）
 _RECALL_THRESHOLD  = 0.2
+_PARENT_MAX_PER_FILE = 2
 
 _DEFAULT_EXTRACT_PROMPT = get_service(BASE_EXTRACT_MCP_SERVICE)
 _DEFAULT_EXTRACT_Q = _DEFAULT_EXTRACT_PROMPT.q
@@ -139,6 +140,62 @@ def _preview_for_log(text: str, limit: int = 1200) -> str:
     if len(compact) <= limit:
         return compact
     return f"{compact[:limit]}..."
+
+
+def _is_table_parent_chunk(hit: dict) -> bool:
+    raw = str(hit.get("raw_content") or "")
+    return (
+        str(hit.get("label") or "") == "table"
+        and raw.startswith("工作表：")
+        and "粒度：sheet" in raw
+    )
+
+
+def _expand_parent_hits(query: str, hits: list[dict]) -> list[dict]:
+    if not hits:
+        return hits
+
+    existing_ids = {str(hit.get("id") or "") for hit in hits}
+    base_groups: dict[tuple[str, str], list[dict]] = {}
+    for hit in hits:
+        if str(hit.get("label") or "") != "table":
+            continue
+        file_id = str(hit.get("file_id") or "")
+        source = str(hit.get("source") or "")
+        if not file_id or not source:
+            continue
+        base_groups.setdefault((file_id, source), []).append(hit)
+
+    parent_hits: list[dict] = []
+    for (file_id, source), _group_hits in base_groups.items():
+        try:
+            related = Embedder.query_chunks_by_file(
+                file_id=file_id,
+                source=source,
+                label="table",
+                limit=64,
+            )
+        except Exception as exc:
+            logger.warning("[Query] 回捞父块失败: file_id=%s err=%s", file_id[:12], exc)
+            continue
+
+        candidates = [
+            item for item in related
+            if _is_table_parent_chunk(item)
+            and str(item.get("id") or "") not in existing_ids
+        ]
+        if not candidates:
+            continue
+
+        reranked = Reranker.rerank(query=query, hits=candidates, top_n=min(_PARENT_MAX_PER_FILE, len(candidates)))
+        for parent in reranked:
+            parent["parent_context"] = True
+            parent_hits.append(parent)
+            existing_ids.add(str(parent.get("id") or ""))
+
+    if parent_hits:
+        logger.info("[Query] Parent-child 补充父块 %d 条", len(parent_hits))
+    return hits + parent_hits
 
 
 def _log_matched_sources(hits: list[dict]) -> None:
@@ -235,6 +292,7 @@ def _retrieve_hits(
     reranker_used = Reranker.is_available()
     rerank_top_n = len(hits) if prefer_source else top_k
     hits = Reranker.rerank(query=q, hits=hits, top_n=rerank_top_n)
+    hits = _expand_parent_hits(q, hits)
     if prefer_source:
         keyword = prefer_source.strip().lower()
         if keyword:
@@ -469,7 +527,14 @@ def _build_context(hits: list[dict]) -> str:
     for dt, group_hits in groups.items():
         label = _DOC_TYPE_LABEL.get(dt, dt)
         parts.append(f"【{label}】")
-        for hit in group_hits:
+        ordered_hits = sorted(
+            group_hits,
+            key=lambda h: (
+                0 if h.get("parent_context") else 1,
+                -float(h.get("rerank_score", h.get("score", 0)) or 0),
+            ),
+        )
+        for hit in ordered_hits:
             source_name = (hit.get("source") or "").split("/")[-1]
             score_info  = (
                 f"相关度 {hit['rerank_score']:.2f}"

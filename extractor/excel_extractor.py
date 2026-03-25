@@ -17,6 +17,8 @@ class _Candidate(TypedDict):
 
 
 class ExcelExtractor(BaseExtractor):
+    WINDOW_ROWS = 40
+
     def __init__(self, file_path: str):
         self._file_path = file_path
 
@@ -39,15 +41,18 @@ class ExcelExtractor(BaseExtractor):
                     header_row_idx, col_map, max_col = self._find_header(sheet)
                     if not col_map:
                         continue
+                    row_records: list[dict[str, object]] = []
                     for row in sheet.iter_rows(min_row=header_row_idx + 1, max_col=max_col, values_only=False):
                         if all(cell.value is None for cell in row):
                             continue
                         row_values: dict[int, str] = {}
+                        formatted_values: dict[int, str] = {}
                         for col_idx, cell in enumerate(row):
                             if col_idx not in col_map:
                                 continue
                             raw = cell.value
                             row_values[col_idx] = "" if raw is None else str(raw).strip()
+                            formatted_values[col_idx] = self._format_cell_value(cell)
 
                         if self._is_repeated_header_row(row_values, col_map):
                             continue
@@ -59,24 +64,32 @@ class ExcelExtractor(BaseExtractor):
                             continue
 
                         parts = []
-                        for col_idx, cell in enumerate(row):
-                            if col_idx not in col_map:
-                                continue
+                        row_map: dict[str, str] = {}
+                        for col_idx in sorted(col_map.keys()):
                             col_name = col_map[col_idx]
-                            value = cell.value
-                            if hasattr(cell, "hyperlink") and cell.hyperlink:
-                                target = getattr(cell.hyperlink, "target", None)
-                                if target:
-                                    value = f"[{value}]({target})"
-                            value = "" if value is None else str(value).strip().replace('"', '\\"')
-                            parts.append(f'"{col_name}":"{value}"')
-                        if parts:
-                            documents.append(
-                                Document(
-                                    page_content="; ".join(parts),
-                                    metadata={"source": self._file_path, "sheet": sheet_name},
-                                )
+                            value = formatted_values.get(col_idx, "")
+                            row_map[col_name] = value
+                            parts.append(f'"{col_name}":"{self._escape_json_text(value)}"')
+                        if not parts:
+                            continue
+                        row_number = getattr(row[0], "row", None)
+                        row_records.append({
+                            "row_number": row_number,
+                            "row_map": row_map,
+                        })
+                        documents.append(
+                            Document(
+                                page_content=f'"工作表":"{self._escape_json_text(sheet_name)}"; "行号":"{row_number or ""}"; ' + "; ".join(parts),
+                                metadata={
+                                    "source": self._file_path,
+                                    "sheet": sheet_name,
+                                    "label": "table",
+                                    "granularity": "row",
+                                    "row_number": row_number,
+                                },
                             )
+                        )
+                    documents.extend(self._build_aggregate_documents(sheet_name, col_map, row_records))
             finally:
                 wb.close()
 
@@ -85,27 +98,12 @@ class ExcelExtractor(BaseExtractor):
             for sheet_name in excel_file.sheet_names:
                 df = excel_file.parse(sheet_name=sheet_name)
                 df.dropna(how="all", inplace=True)
-                for _, row in df.iterrows():
-                    parts = [f'"{k}":"{v}"' for k, v in row.items() if pd.notna(v)]
-                    documents.append(
-                        Document(
-                            page_content="; ".join(parts),
-                            metadata={"source": self._file_path, "sheet": sheet_name},
-                        )
-                    )
+                documents.extend(self._build_documents_from_dataframe(df, sheet_name))
         elif detected == "html":
             tables = pd.read_html(self._file_path)
             for idx, df in enumerate(tables, start=1):
                 df.dropna(how="all", inplace=True)
-                for _, row in df.iterrows():
-                    parts = [f'"{k}":"{v}"' for k, v in row.items() if pd.notna(v)]
-                    if parts:
-                        documents.append(
-                            Document(
-                                page_content="; ".join(parts),
-                                metadata={"source": self._file_path, "sheet": f"table_{idx}"},
-                            )
-                        )
+                documents.extend(self._build_documents_from_dataframe(df, f"table_{idx}"))
         else:
             raise ValueError(f"不支持的 Excel 文件格式: ext={ext}, file={os.path.basename(self._file_path)}。"
     " 文件可能并不是真正的 Excel，或扩展名与实际内容不一致。")
@@ -210,3 +208,129 @@ class ExcelExtractor(BaseExtractor):
     @staticmethod
     def _normalize_text(value: str) -> str:
         return re.sub(r"\s+", "", value).strip().lower()
+
+    @staticmethod
+    def _escape_json_text(value: str) -> str:
+        return value.replace('"', '\\"')
+
+    @staticmethod
+    def _format_cell_value(cell) -> str:
+        value = getattr(cell, "value", cell)
+        if hasattr(cell, "hyperlink") and cell.hyperlink:
+            target = getattr(cell.hyperlink, "target", None)
+            if target:
+                return f"[{value}]({target})"
+        return "" if value is None else str(value).strip()
+
+    def _build_documents_from_dataframe(self, df: pd.DataFrame, sheet_name: str) -> list[Document]:
+        documents: list[Document] = []
+        columns = [str(col).strip() for col in df.columns if str(col).strip()]
+        if not columns:
+            return documents
+
+        row_records: list[dict[str, object]] = []
+        for idx, row in df.iterrows():
+            row_map: dict[str, str] = {}
+            parts: list[str] = []
+            for col in columns:
+                raw = row[col]
+                if pd.isna(raw):
+                    value = ""
+                else:
+                    value = str(raw).strip()
+                row_map[col] = value
+                parts.append(f'"{col}":"{self._escape_json_text(value)}"')
+            if not any(v.strip() for v in row_map.values()):
+                continue
+            row_number = int(idx) + 2
+            row_records.append({"row_number": row_number, "row_map": row_map})
+            documents.append(
+                Document(
+                    page_content=f'"工作表":"{self._escape_json_text(sheet_name)}"; "行号":"{row_number}"; ' + "; ".join(parts),
+                    metadata={
+                        "source": self._file_path,
+                        "sheet": sheet_name,
+                        "label": "table",
+                        "granularity": "row",
+                        "row_number": row_number,
+                    },
+                )
+            )
+
+        documents.extend(
+            self._build_aggregate_documents(
+                sheet_name,
+                {i: col for i, col in enumerate(columns)},
+                row_records,
+            )
+        )
+        return documents
+
+    def _build_aggregate_documents(
+        self,
+        sheet_name: str,
+        col_map: dict[int, str],
+        row_records: list[dict[str, object]],
+    ) -> list[Document]:
+        if not row_records:
+            return []
+
+        documents: list[Document] = []
+        columns = [col_map[idx] for idx in sorted(col_map.keys())]
+        total = len(row_records)
+
+        for start in range(0, total, self.WINDOW_ROWS):
+            window_rows = row_records[start:start + self.WINDOW_ROWS]
+            if len(window_rows) <= 1:
+                continue
+            documents.append(
+                Document(
+                    page_content=self._format_table_block(sheet_name, columns, window_rows, granularity="window"),
+                    metadata={
+                        "source": self._file_path,
+                        "sheet": sheet_name,
+                        "label": "table",
+                        "granularity": "window",
+                        "row_start": window_rows[0].get("row_number"),
+                        "row_end": window_rows[-1].get("row_number"),
+                    },
+                )
+            )
+
+        if total > 1:
+            documents.append(
+                Document(
+                    page_content=self._format_table_block(sheet_name, columns, row_records, granularity="sheet"),
+                    metadata={
+                        "source": self._file_path,
+                        "sheet": sheet_name,
+                        "label": "table",
+                        "granularity": "sheet",
+                        "row_start": row_records[0].get("row_number"),
+                        "row_end": row_records[-1].get("row_number"),
+                    },
+                )
+            )
+
+        return documents
+
+    @staticmethod
+    def _format_table_block(
+        sheet_name: str,
+        columns: list[str],
+        row_records: list[dict[str, object]],
+        *,
+        granularity: str,
+    ) -> str:
+        lines = [
+            f"工作表：{sheet_name}",
+            f"粒度：{granularity}",
+            "表头：" + "\t".join(columns),
+        ]
+        for record in row_records:
+            row_map = record.get("row_map", {})
+            row_number = record.get("row_number")
+            values = [str(row_map.get(col, "")).replace("\n", " ").strip() for col in columns]
+            prefix = f"第{row_number}行\t" if row_number else ""
+            lines.append(prefix + "\t".join(values))
+        return "\n".join(lines)

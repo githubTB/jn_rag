@@ -12,25 +12,35 @@ system_prompt = "你是一个数据提取分析师，基于提供的文本，提
 
 # user 提示词模板（必须包含 {text} 占位符）
 user_prompt = """
-任务：从文本中抽取企业信息并输出JSON。
+任务：
+    你需要从提供的文本中抽取“当前企业”的基本信息和财务信息，并输出一个JSON对象。
+
+
+抽取规则：
+    1. 只抽取一个企业的信息（若文本中存在多个企业，仅抽取主要描述企业）
+    2. 所有字段必须存在
+    3. 未出现或无法判断的字段填 null
+    4. 数值字段必须只保留数字（去掉单位、逗号、万元、亿元等）
+    5. 是否上市 只能输出：是 或 否
+
 
 字段：
-    company_name 企业名称
-    company_credit_code 统一社会信用代码
-    company_registered_type 注册类型
-    company_registered_capital 注册资本
-    company_registered_address 注册地址
-    company_establishment_date 成立日期
-    company_legal_representative 企业法定代表人
-    company_office_address 办公地址
-    company_contact_phone 联系电话
-    company_contact_email 联系邮箱
-    company_industry 行业分类
-    company_region_code 注册企业区名称
-    company_remark 备注
-    revenue 营业收入（数字）
-    net_profit 净利润（数字）
-    listed_status 是否上市（是/否）
+    企业名称
+    统一社会信用代码
+    注册类型
+    注册资本
+    注册地址
+    成立日期
+    法定代表人
+    办公地址
+    联系电话
+    联系邮箱
+    行业分类
+    注册企业区名称
+    备注
+    营业收入（数字）
+    净利润（数字）
+    是否上市（是/否）
 
 输出：
     JSON对象

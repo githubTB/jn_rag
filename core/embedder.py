@@ -251,6 +251,43 @@ class Embedder:
         return hits
 
     @classmethod
+    def query_chunks_by_file(
+        cls,
+        *,
+        file_id: str,
+        source: str | None = None,
+        label: str | None = None,
+        limit: int = 64,
+    ) -> list[dict]:
+        col = _get_collection()
+        expr_parts = [f'file_id == "{file_id}"']
+        if source:
+            expr_parts.append(f'source == "{source}"')
+        if label:
+            expr_parts.append(f'label == "{label}"')
+        expr = " and ".join(expr_parts)
+
+        rows = col.query(
+            expr=expr,
+            limit=limit,
+            output_fields=[
+                "chunk_id", "file_id", "company_id", "doc_type",
+                "source", "label", "content", "raw_content", "chunk_index",
+            ],
+        )
+        return [{
+            "id": row.get("chunk_id"),
+            "file_id": row.get("file_id"),
+            "company_id": row.get("company_id"),
+            "doc_type": row.get("doc_type"),
+            "source": row.get("source"),
+            "label": row.get("label"),
+            "content": row.get("content"),
+            "raw_content": row.get("raw_content"),
+            "chunk_index": row.get("chunk_index"),
+        } for row in rows]
+
+    @classmethod
     def delete_by_file(cls, file_id: str) -> None:
         col = _get_collection()
         col.delete(expr=f'file_id == "{file_id}"')
