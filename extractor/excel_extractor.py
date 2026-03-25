@@ -1,4 +1,5 @@
 import os
+import re
 from zipfile import BadZipFile
 from typing import TypedDict
 
@@ -41,6 +42,22 @@ class ExcelExtractor(BaseExtractor):
                     for row in sheet.iter_rows(min_row=header_row_idx + 1, max_col=max_col, values_only=False):
                         if all(cell.value is None for cell in row):
                             continue
+                        row_values: dict[int, str] = {}
+                        for col_idx, cell in enumerate(row):
+                            if col_idx not in col_map:
+                                continue
+                            raw = cell.value
+                            row_values[col_idx] = "" if raw is None else str(raw).strip()
+
+                        if self._is_repeated_header_row(row_values, col_map):
+                            continue
+                        if not self._has_non_key_cell_value(row_values, col_map):
+                            # 通用且保守：多列表格中，除首列外全空的行通常是标题/分隔行
+                            continue
+                        if self._is_sparse_auxiliary_row(row_values, col_map):
+                            # 通用且保守：首列为空、仅一个辅助列有值的行通常是单位/注释行
+                            continue
+
                         parts = []
                         for col_idx, cell in enumerate(row):
                             if col_idx not in col_map:
@@ -140,3 +157,56 @@ class ExcelExtractor(BaseExtractor):
 
         max_col = max(best["map"].keys()) + 1
         return best["idx"], best["map"], max_col
+
+    def _is_repeated_header_row(self, row_values: dict[int, str], col_map: dict[int, str]) -> bool:
+        """
+        过滤重复表头行：
+        例如在中途再次出现 “品名 / 2021年 / 2022年 / 2023年”。
+        """
+        non_empty = {k: v for k, v in row_values.items() if v}
+        if not non_empty:
+            return False
+        matched = 0
+        for col_idx, value in non_empty.items():
+            if self._normalize_text(value) == self._normalize_text(col_map.get(col_idx, "")):
+                matched += 1
+        return matched >= max(2, len(non_empty) - 1)
+
+    def _has_non_key_cell_value(self, row_values: dict[int, str], col_map: dict[int, str]) -> bool:
+        """
+        通用数据有效性判断：
+        - 若表头只有 1 列，只要该列非空即可
+        - 若表头有多列，要求至少一个“非首列”有值
+        """
+        if not col_map:
+            return False
+        ordered_cols = sorted(col_map.keys())
+        if len(ordered_cols) == 1:
+            return bool((row_values.get(ordered_cols[0]) or "").strip())
+        for col_idx in ordered_cols[1:]:
+            if (row_values.get(col_idx) or "").strip():
+                return True
+        return False
+
+    def _is_sparse_auxiliary_row(self, row_values: dict[int, str], col_map: dict[int, str]) -> bool:
+        if not col_map:
+            return False
+        ordered_cols = sorted(col_map.keys())
+        if len(ordered_cols) < 2:
+            return False
+
+        first_col = ordered_cols[0]
+        first_val = (row_values.get(first_col) or "").strip()
+        if first_val:
+            return False
+
+        non_key_non_empty = [
+            (c, (row_values.get(c) or "").strip())
+            for c in ordered_cols[1:]
+            if (row_values.get(c) or "").strip()
+        ]
+        return len(non_key_non_empty) == 1
+
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        return re.sub(r"\s+", "", value).strip().lower()

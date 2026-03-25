@@ -496,13 +496,26 @@ _PATH_RULES: list[tuple[list[str], str]] = [
     (["发票", "invoice", "单据", "收据"],                                        "invoice"),
 ]
 
+_EXT_RULES: dict[str, str] = {
+    # 结构化表格文件：按扩展名直接判定为 table
+    ".xlsx": "table",
+    ".xls": "table",
+    ".csv": "table",
+}
+
 
 def _guess_doc_type(file_path: Path) -> str:
+    suffix = file_path.suffix.lower()
+    ext_type = _EXT_RULES.get(suffix)
+    if ext_type:
+        return ext_type
+
     path_str = "/".join(file_path.parts).lower()
     for keywords, dt in _PATH_RULES:
         if any(k.lower() in path_str for k in keywords):
             return dt
-    suffix = file_path.suffix.lower()
+
+    # 图片默认走 nameplate（后续可由识别内容再细分）
     if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif"}:
         return "nameplate"
     return "document"

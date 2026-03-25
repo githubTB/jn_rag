@@ -351,6 +351,10 @@ nav{display:flex;gap:2px}
         <select id="q-topk"><option>3</option><option selected>5</option><option>10</option></select>
         <label>企业：</label>
         <select id="q-company"><option value="">全部企业</option></select>
+        <label>优先文件：</label>
+        <select id="q-prefer-source" disabled>
+          <option value="">未指定</option>
+        </select>
         <label>类型：</label>
         <select id="q-type">
           <option value="">全部</option>
@@ -396,6 +400,7 @@ const STATUS_CLS   = {done:'tg-done',failed:'tg-failed',pending:'tg-pending'};
 const DOC_TYPES    = ['license','invoice','table','nameplate','document','unknown'];
 
 let healthData = {}, companies = [];
+let companyFilesCache = {};
 let folderFiles = [];       // 选中的文件列表
 let uploadedCompanyId = ''; // 上传成功后记录企业ID，用于入库
 
@@ -472,7 +477,7 @@ async function loadOverview() {
 
   document.getElementById('sys-detail').innerHTML = [
     `Milvus：<strong>${d.milvus?'✓ 在线':'✗ 离线'}</strong>  ${d.milvus_host||'localhost'}:${d.milvus_port||19530}`,
-    `向量模型：<strong>${d.embed_model||'-'}</strong>  ${d.embed_device||'cpu'}`,
+    `向量模型：<strong>${d.embed_model||'-'}</strong>`,
     `Reranker：<strong>${d.reranker_model||'-'}</strong>`,
     `OCR：<strong>${d.vl_backend||'本地'}</strong>`,
     `LLM：<strong>${d.llm_model||'-'}</strong>`,
@@ -785,6 +790,7 @@ async function doSearch() {
   if (!q) { toast('请输入问题','warning'); return; }
   const topk = document.getElementById('q-topk').value;
   const cid  = document.getElementById('q-company').value;
+  const preferSource = document.getElementById('q-prefer-source').value;
   const dt   = document.getElementById('q-type').value;
   const btn  = document.getElementById('qbtn');
   btn.disabled=true; btn.innerHTML='<span class="spin">🔍</span> 搜索中…';
@@ -793,6 +799,7 @@ async function doSearch() {
   try {
     let url = `/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
     if (cid) url+=`&company_id=${encodeURIComponent(cid)}`;
+    if (preferSource) url+=`&prefer_source=${encodeURIComponent(preferSource)}`;
     if (dt)  url+=`&doc_type=${encodeURIComponent(dt)}`;
     const r = await fetch(url);
     if (!r.ok) { const e=await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
@@ -838,7 +845,34 @@ function refreshSelects() {
   const el = document.getElementById('q-company');
   const first = el.options[0].outerHTML;
   el.innerHTML = first + companies.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
+  refreshPreferSourceOptions();
 }
+
+async function refreshPreferSourceOptions() {
+  const cid = document.getElementById('q-company').value;
+  const sel = document.getElementById('q-prefer-source');
+  sel.innerHTML = '<option value="">未指定</option>';
+
+  if (!cid) {
+    sel.disabled = true;
+    return;
+  }
+
+  sel.disabled = false;
+  if (!companyFilesCache[cid]) {
+    try {
+      const d = await fetch(`/api/companies/${encodeURIComponent(cid)}`).then(r=>r.json());
+      companyFilesCache[cid] = (d.files || []).map(f => f.filename).filter(Boolean);
+    } catch {
+      companyFilesCache[cid] = [];
+    }
+  }
+
+  const files = [...new Set(companyFilesCache[cid])].sort((a,b)=>a.localeCompare(b,'zh-CN'));
+  sel.innerHTML += files.map(name => `<option value="${name}">${name}</option>`).join('');
+}
+
+document.getElementById('q-company').addEventListener('change', refreshPreferSourceOptions);
 
 // ── 初始化 ────────────────────────────────────────────────────────────────
 (async () => {

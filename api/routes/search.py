@@ -134,6 +134,35 @@ def _resolve_with_service_default(
     return incoming
 
 
+def _preview_for_log(text: str, limit: int = 1200) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return f"{compact[:limit]}..."
+
+
+def _log_matched_sources(hits: list[dict]) -> None:
+    """
+    打印向量检索匹配到的源文档内容。
+    重点格式：file_id:源文档内容
+    """
+    if not hits:
+        logger.info("[RetrieveHit] 无命中")
+        return
+
+    for idx, hit in enumerate(hits, start=1):
+        file_id = str(hit.get("file_id") or "unknown_file_id")
+        source = str(hit.get("source") or "")
+        content = str(hit.get("raw_content") or hit.get("content") or "")
+        logger.info(
+            "[RetrieveHit] #%s %s:%s source=%s",
+            idx,
+            file_id,
+            _preview_for_log(content),
+            source,
+        )
+
+
 class QueryExtractRequest(BaseModel):
     service_name: str = Field(BASE_EXTRACT_MCP_SERVICE, description="模板服务名")
     q: str | None = Field(None, min_length=1, description="检索问题/抽取主题（不传则使用服务默认值）")
@@ -142,6 +171,7 @@ class QueryExtractRequest(BaseModel):
     company_id: str | None = Field(None, description="限定企业范围")
     doc_type: str | None = Field(None, description="限定文件类型")
     file_id: str | None = Field(None, description="限定单个文件")
+    prefer_source: str | None = Field(None, description="优先命中的源文件名关键词")
     system_prompt: str | None = Field(None, description="系统提示词（不传则使用服务默认值）")
     user_prompt_template: str | None = Field(
         None,
@@ -160,6 +190,7 @@ def _retrieve_hits(
     company_id: str | None,
     doc_type: str | None,
     file_id: str | None,
+    prefer_source: str | None = None,
 ) -> tuple[list[dict], bool]:
     if doc_type and doc_type not in DocType.ALL:
         raise HTTPException(status_code=400, detail=f"无效的 doc_type: {doc_type}")
@@ -184,8 +215,22 @@ def _retrieve_hits(
 
     logger.info("[Query] 向量粗筛: %d 条候选", len(hits))
     reranker_used = Reranker.is_available()
-    hits = Reranker.rerank(query=q, hits=hits, top_n=top_k)
+    rerank_top_n = len(hits) if prefer_source else top_k
+    hits = Reranker.rerank(query=q, hits=hits, top_n=rerank_top_n)
+    if prefer_source:
+        keyword = prefer_source.strip().lower()
+        if keyword:
+            hits.sort(
+                key=lambda h: (
+                    keyword in ((h.get("source") or "").split("/")[-1].lower()),
+                    h.get("rerank_score", h.get("score", 0)),
+                ),
+                reverse=True,
+            )
+            logger.info("[Query] 已应用 prefer_source 加权: %r", prefer_source)
+        hits = hits[:top_k]
     logger.info("[Query] 精排后: %d 条", len(hits))
+    _log_matched_sources(hits)
     return hits, reranker_used
 
 @router.get("/query")
@@ -196,6 +241,7 @@ async def query(
     company_id: str | None = Query(None, description="限定企业范围"),
     doc_type: str | None = Query(None, description="限定文件类型"),
     file_id: str | None = Query(None, description="限定单个文件"),
+    prefer_source: str | None = Query(None, description="优先命中的源文件名关键词"),
 ):
     """
     向量检索 + Reranker 精排 + Qwen 生成带来源标注的答案。
@@ -217,6 +263,7 @@ async def query(
         company_id=company_id,
         doc_type=doc_type,
         file_id=file_id,
+        prefer_source=prefer_source,
     )
 
     if not hits:
@@ -322,6 +369,7 @@ async def query_extract(body: QueryExtractRequest):
         company_id=body.company_id,
         doc_type=body.doc_type,
         file_id=body.file_id,
+        prefer_source=body.prefer_source,
     )
 
     if not hits:
@@ -337,7 +385,6 @@ async def query_extract(body: QueryExtractRequest):
         })
 
     context = _build_context(hits)
-    logger.log("query llm context %s", context)
 
     raw_output, structured_data = await _call_llm_extract(
         text=context,
