@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+from math import log
 import re
 
 from fastapi import APIRouter, HTTPException, Query
@@ -19,8 +20,9 @@ from pydantic import BaseModel, Field
 
 from config.settings import settings
 from services.mcp_service import (
-    DEFAULT_EXTRACT_PROMPT_SERVICE,
+    BASE_EXTRACT_MCP_SERVICE,
     get_service,
+    list_service_names,
 )
 from core.dedup import Dedup, DocType
 from core.embedder import Embedder
@@ -104,30 +106,46 @@ _RECALL_MULTIPLIER = 3
 # 向量粗筛阈值（比 /search 放宽，让 Reranker 有更多候选）
 _RECALL_THRESHOLD  = 0.2
 
-_DEFAULT_EXTRACT_PROMPT = get_service(DEFAULT_EXTRACT_PROMPT_SERVICE)
+_DEFAULT_EXTRACT_PROMPT = get_service(BASE_EXTRACT_MCP_SERVICE)
 _DEFAULT_EXTRACT_Q = _DEFAULT_EXTRACT_PROMPT.q
 _DEFAULT_EXTRACT_SYSTEM_PROMPT = _DEFAULT_EXTRACT_PROMPT.system_prompt
 _DEFAULT_EXTRACT_USER_TEMPLATE = _DEFAULT_EXTRACT_PROMPT.user_prompt
 
-_PROMOTER_SERVICE_PRESETS: dict[str, dict[str, str]] = {
-    "default": {
-        "system_prompt": _DEFAULT_EXTRACT_SYSTEM_PROMPT,
-        "user_prompt_template": _DEFAULT_EXTRACT_USER_TEMPLATE,
-    },
-}
+
+def _resolve_with_service_default(
+    incoming: str | None,
+    *,
+    base_default: str,
+    service_default: str,
+) -> str:
+    """
+    解析字段最终值：
+    - 未传/空字符串 -> 使用 service 默认值
+    - 传入值等于 base 默认值 -> 视为前端占位默认值，使用 service 默认值
+    - 其他情况 -> 使用传入值
+    """
+    if incoming is None:
+        return service_default
+    normalized = incoming.strip()
+    if not normalized:
+        return service_default
+    if normalized == base_default:
+        return service_default
+    return incoming
 
 
 class QueryExtractRequest(BaseModel):
-    q: str = Field(_DEFAULT_EXTRACT_Q, min_length=1, description="检索问题/抽取主题")
+    service_name: str = Field(BASE_EXTRACT_MCP_SERVICE, description="模板服务名")
+    q: str | None = Field(None, min_length=1, description="检索问题/抽取主题（不传则使用服务默认值）")
     top_k: int = Field(5, ge=1, le=20, description="最终保留条数")
     score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="向量检索最低相似度")
     company_id: str | None = Field(None, description="限定企业范围")
     doc_type: str | None = Field(None, description="限定文件类型")
     file_id: str | None = Field(None, description="限定单个文件")
-    system_prompt: str = Field(_DEFAULT_EXTRACT_SYSTEM_PROMPT, description="系统提示词")
-    user_prompt_template: str = Field(
-        _DEFAULT_EXTRACT_USER_TEMPLATE,
-        description="用户提示词模板，必须包含 {text} 占位符",
+    system_prompt: str | None = Field(None, description="系统提示词（不传则使用服务默认值）")
+    user_prompt_template: str | None = Field(
+        None,
+        description="用户提示词模板，必须包含 {text} 占位符（不传则使用服务默认值）",
     )
     max_tokens: int = Field(2000, ge=1, le=8192, description="LLM 最大输出 token")
     include_chunks: bool = Field(True, description="是否返回召回片段")
@@ -261,14 +279,44 @@ async def query_extract(body: QueryExtractRequest):
 
     适合把企业文档中的关键字段抽取为 JSON。
     """
-    logger.info("[QueryExtract] q=%r company=%s type=%s",
-                body.q, body.company_id, body.doc_type)
+    logger.info(
+        "[QueryExtract] service=%s q=%r company=%s type=%s",
+        body.service_name,
+        body.q,
+        body.company_id,
+        body.doc_type,
+    )
 
-    if "{text}" not in body.user_prompt_template:
+    if body.service_name not in list_service_names():
+        raise HTTPException(
+            status_code=400,
+            detail=f"无效的 service_name: {body.service_name}，可选: {', '.join(list_service_names())}",
+        )
+
+    selected_service = get_service(body.service_name)
+    logger.info("[QueryExtract] selected_service=%s", selected_service)
+    
+    request_q = _resolve_with_service_default(
+        body.q,
+        base_default=_DEFAULT_EXTRACT_Q,
+        service_default=selected_service.q,
+    )
+    request_system_prompt = _resolve_with_service_default(
+        body.system_prompt,
+        base_default=_DEFAULT_EXTRACT_SYSTEM_PROMPT,
+        service_default=selected_service.system_prompt,
+    )
+    request_user_prompt_template = _resolve_with_service_default(
+        body.user_prompt_template,
+        base_default=_DEFAULT_EXTRACT_USER_TEMPLATE,
+        service_default=selected_service.user_prompt,
+    )
+
+    if "{text}" not in request_user_prompt_template:
         raise HTTPException(status_code=400, detail="user_prompt_template 必须包含 {text} 占位符")
 
     hits, reranker_used = _retrieve_hits(
-        q=body.q,
+        q=request_q,
         top_k=body.top_k,
         score_threshold=body.score_threshold,
         company_id=body.company_id,
@@ -278,7 +326,7 @@ async def query_extract(body: QueryExtractRequest):
 
     if not hits:
         return JSONResponse({
-            "query": body.q,
+            "query": request_q,
             "company_id": body.company_id,
             "structured_data": None,
             "raw_output": None,
@@ -289,10 +337,12 @@ async def query_extract(body: QueryExtractRequest):
         })
 
     context = _build_context(hits)
+    logger.log("query llm context %s", context)
+
     raw_output, structured_data = await _call_llm_extract(
         text=context,
-        system_prompt=body.system_prompt,
-        user_prompt_template=body.user_prompt_template,
+        system_prompt=request_system_prompt,
+        user_prompt_template=request_user_prompt_template,
         max_tokens=body.max_tokens,
     )
 
@@ -312,7 +362,8 @@ async def query_extract(body: QueryExtractRequest):
             })
 
     response: dict = {
-        "query": body.q,
+        "query": request_q,
+        "service_name": body.service_name,
         "company_id": body.company_id,
         "structured_data": structured_data,
         "sources": sources,
@@ -324,34 +375,6 @@ async def query_extract(body: QueryExtractRequest):
         response["raw_output"] = raw_output
     return JSONResponse(response)
 
-
-def _normalize_promoter(name: str) -> str:
-    promoter = name.strip().lower().replace(" ", "_")
-    return promoter or "default"
-
-
-def _resolve_promoter_prompts(
-    *,
-    promoter: str,
-    system_prompt: str,
-    user_prompt_template: str,
-) -> tuple[str, str]:
-    preset = _PROMOTER_SERVICE_PRESETS.get(promoter)
-    if not preset:
-        return system_prompt, user_prompt_template
-
-    resolved_system_prompt = (
-        preset["system_prompt"]
-        if system_prompt == _DEFAULT_EXTRACT_SYSTEM_PROMPT
-        else system_prompt
-    )
-    resolved_user_prompt_template = (
-        preset["user_prompt_template"]
-        if user_prompt_template == _DEFAULT_EXTRACT_USER_TEMPLATE
-        else user_prompt_template
-    )
-    return resolved_system_prompt, resolved_user_prompt_template
-    
 
 # ---------------------------------------------------------------------------
 # context 构建（按 doc_type 分组，保留 rerank_score）
@@ -473,7 +496,7 @@ async def _call_llm_extract(
     system_prompt: str,
     user_prompt_template: str,
     max_tokens: int,
-) -> tuple[str, dict | None]:
+) -> tuple[str, dict | list | None]:
     try:
         from openai import AsyncOpenAI
     except ImportError as exc:
@@ -501,19 +524,68 @@ async def _call_llm_extract(
         raise HTTPException(status_code=500, detail=f"LLM 提取失败: {exc}")
 
     raw = (resp.choices[0].message.content or "").strip()
-    logger.debug("[LLMExtract] 原始输出: %s", raw[:500])
-    return raw, _safe_parse_json(raw)
+    finish_reason = resp.choices[0].finish_reason
+    logger.debug("[LLMExtract] finish_reason=%s 原始输出: %s", finish_reason, raw[:500])
+
+    parsed = _safe_parse_json(raw)
+    # 输出被 max_tokens 截断时，自动放大 token 重试一次，减少半截 JSON。
+    if parsed is None and finish_reason == "length" and max_tokens < 8192:
+        retry_max_tokens = min(8192, max_tokens * 2)
+        logger.warning(
+            "[LLMExtract] 输出疑似截断，重试一次 max_tokens=%s -> %s",
+            max_tokens,
+            retry_max_tokens,
+        )
+        try:
+            retry_resp = await client.chat.completions.create(
+                model=settings.llm_model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0,
+                max_tokens=retry_max_tokens,
+                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            )
+            retry_raw = (retry_resp.choices[0].message.content or "").strip()
+            retry_finish_reason = retry_resp.choices[0].finish_reason
+            logger.debug(
+                "[LLMExtract] retry finish_reason=%s 原始输出: %s",
+                retry_finish_reason,
+                retry_raw[:500],
+            )
+            retry_parsed = _safe_parse_json(retry_raw)
+            if retry_parsed is not None:
+                return retry_raw, retry_parsed
+        except Exception as exc:
+            logger.warning("[LLMExtract] 重试失败: %s", exc)
+
+    return raw, parsed
 
 
-def _safe_parse_json(text: str) -> dict | None:
+def _safe_parse_json(text: str) -> dict | list | None:
     cleaned = text.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
         cleaned = re.sub(r"\s*```$", "", cleaned)
-    try:
-        data = json.loads(cleaned)
-        return data if isinstance(data, dict) else {"data": data}
-    except Exception:
-        logger.warning("[LLMExtract] JSON 解析失败，保留原始输出")
-        return None
+    candidates = [cleaned]
+
+    # 容忍模型在 JSON 前后加解释文本，尝试抽取第一个完整 JSON 块。
+    obj_match = re.search(r"\{[\s\S]*\}", cleaned)
+    arr_match = re.search(r"\[[\s\S]*\]", cleaned)
+    if obj_match:
+        candidates.append(obj_match.group(0))
+    if arr_match:
+        candidates.append(arr_match.group(0))
+
+    for candidate in candidates:
+        try:
+            data = json.loads(candidate)
+            if isinstance(data, (dict, list)):
+                return data
+        except Exception:
+            continue
+
+    logger.warning("[LLMExtract] JSON 解析失败，保留原始输出")
+    return None
         

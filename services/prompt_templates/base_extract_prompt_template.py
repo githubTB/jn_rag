@@ -1,11 +1,11 @@
 """
-默认结构化抽取配置（单文件三变量）。
+企业基本信息结构化抽取配置（单文件三变量）。
 """
 
-SERVICE_NAME = "default_extract_profile"
+SERVICE_NAME = "base_extract_prompt_template"
 
 # 检索问题/抽取主题默认值
-q = "提取企业基础信息与关键财务指标"
+q = "提取本企业营业执照信息、企业基本信息、财务信息"
 
 # system 提示词
 system_prompt = "你是一个数据提取分析师，基于提供的文本，提取出其中的数值信息和关联数值信息。"
