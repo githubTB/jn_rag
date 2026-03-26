@@ -1,6 +1,4 @@
-# jn\_rag
 
-<br />
 
 上传文件
     ↓
@@ -17,7 +15,3 @@ Chunk 级去重（Dedup.filter_new_chunks）← 过滤重复内容
 向量化（Embedder.embed）
     ↓
 入库（Milvus）
-    ↓
-登记 chunk（Dedup.register_chunks）
-    ↓
-标记完成（Dedup.mark_done）
