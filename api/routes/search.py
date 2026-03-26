@@ -226,6 +226,7 @@ class QueryExtractRequest(BaseModel):
     top_k: int = Field(5, ge=1, le=20, description="最终保留条数")
     score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="向量检索最低相似度")
     company_id: str | None = Field(None, description="限定企业范围")
+    company_name: str | None = Field(None, description="企业名称（可用于 prompt 变量，不传则按 company_id 自动获取）")
     doc_type: str | None = Field(None, description="限定文件类型")
     file_id: str | None = Field(None, description="限定单个文件")
     prefer_source: str | None = Field(None, description="优先命中的源文件名关键词")
@@ -432,6 +433,12 @@ async def query_extract(body: QueryExtractRequest):
     if "{text}" not in request_user_prompt_template:
         raise HTTPException(status_code=400, detail="user_prompt_template 必须包含 {text} 占位符")
 
+    company_name = (body.company_name or "").strip() or None
+    if not company_name and body.company_id:
+        company = Dedup.get_company(body.company_id)
+        if company:
+            company_name = company.get("name")
+
     hits, reranker_used = _retrieve_hits(
         q=request_q,
         top_k=body.top_k,
@@ -458,6 +465,7 @@ async def query_extract(body: QueryExtractRequest):
 
     raw_output, structured_data = await _call_llm_extract(
         text=context,
+        company_name=company_name,
         system_prompt=request_system_prompt,
         user_prompt_template=request_user_prompt_template,
         max_tokens=body.max_tokens,
@@ -482,6 +490,7 @@ async def query_extract(body: QueryExtractRequest):
         "query": request_q,
         "service_name": body.service_name,
         "company_id": body.company_id,
+        "company_name": company_name,
         "structured_data": structured_data,
         "sources": sources,
         "reranker": reranker_used,
@@ -617,6 +626,7 @@ async def _call_llm(
 async def _call_llm_extract(
     *,
     text: str,
+    company_name: str | None,
     system_prompt: str,
     user_prompt_template: str,
     max_tokens: int,
@@ -630,7 +640,10 @@ async def _call_llm_extract(
         base_url=settings.llm_api_base or "http://localhost:8000/v1",
         api_key=settings.llm_api_key or "EMPTY",
     )
-    user_prompt = user_prompt_template.format(text=text)
+    user_prompt = user_prompt_template.format(
+        text=text,
+        company_name=company_name or "",
+    )
 
     try:
         resp = await client.chat.completions.create(

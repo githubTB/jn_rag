@@ -224,7 +224,11 @@ class ExcelExtractor(BaseExtractor):
 
     def _build_documents_from_dataframe(self, df: pd.DataFrame, sheet_name: str) -> list[Document]:
         documents: list[Document] = []
-        columns = [str(col).strip() for col in df.columns if str(col).strip()]
+        columns: list[tuple[object, str]] = [
+            (col, str(col).strip())
+            for col in df.columns
+            if str(col).strip()
+        ]
         if not columns:
             return documents
 
@@ -232,14 +236,14 @@ class ExcelExtractor(BaseExtractor):
         for idx, row in df.iterrows():
             row_map: dict[str, str] = {}
             parts: list[str] = []
-            for col in columns:
-                raw = row[col]
+            for col_key, col_name in columns:
+                raw = row[col_key]
                 if pd.isna(raw):
                     value = ""
                 else:
                     value = str(raw).strip()
-                row_map[col] = value
-                parts.append(f'"{col}":"{self._escape_json_text(value)}"')
+                row_map[col_name] = value
+                parts.append(f'"{col_name}":"{self._escape_json_text(value)}"')
             if not any(v.strip() for v in row_map.values()):
                 continue
             row_number = int(idx) + 2
@@ -260,7 +264,7 @@ class ExcelExtractor(BaseExtractor):
         documents.extend(
             self._build_aggregate_documents(
                 sheet_name,
-                {i: col for i, col in enumerate(columns)},
+                {i: col_name for i, (_col_key, col_name) in enumerate(columns)},
                 row_records,
             )
         )
