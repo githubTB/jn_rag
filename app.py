@@ -138,6 +138,8 @@ async def index():
 async def drop_collection():
     from scripts.cleanup import _drop_milvus_collection
     from config.settings import settings
+    from core.embedder import Embedder
+
     _drop_milvus_collection(settings.milvus_collection)
     # 清 SQLite
     from core.dedup import _conn, _ensure_init
@@ -146,5 +148,11 @@ async def drop_collection():
         conn.execute("DELETE FROM chunks")
         conn.execute("DELETE FROM files")
         conn.execute("DELETE FROM companies")
-    return {"message": "知识库已清空"}
+
+    # 立即触发重建，确保集合结构和名称恢复到当前配置值。
+    Embedder.count()
+    return {
+        "message": "知识库已清空并重建",
+        "collection": settings.milvus_collection,
+    }
     
