@@ -21,7 +21,6 @@ celery -A celery_app worker \
     --loglevel=info \
     --concurrency=2 \
     --pool=solo \
-    --concurrency=1 \
     -Q ingest \
     --logfile=logs/celery_worker.log \
     --pidfile=logs/celery_worker.pid \
