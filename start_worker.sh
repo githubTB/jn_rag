@@ -14,13 +14,14 @@ export PYTHONPATH=$(pwd)
 source venv/bin/activate
 
 # 启动 Worker
+# --pool=solo \
 # --concurrency=2  同时处理2个任务（OCR是IO密集型，2个并发合适）
 # --loglevel=info  日志级别
 # -Q ingest        只消费 ingest 队列
 celery -A celery_app worker \
+    --pool=prefork \
+    --concurrency=6 \
     --loglevel=info \
-    --concurrency=2 \
-    --pool=solo \
     -Q ingest \
     --logfile=logs/celery_worker.log \
     --pidfile=logs/celery_worker.pid \
