@@ -20,7 +20,7 @@ source venv/bin/activate
 # -Q ingest        只消费 ingest 队列
 celery -A celery_app worker \
     --pool=prefork \
-    --concurrency=6 \
+    --concurrency=3 \
     --loglevel=info \
     -Q ingest \
     --logfile=logs/celery_worker.log \
