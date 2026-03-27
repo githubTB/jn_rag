@@ -87,12 +87,17 @@ nav{display:flex;gap:2px}
 .frow{display:grid;grid-template-columns:1fr auto auto auto auto;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;transition:background .12s;border:1px solid transparent}
 .frow:hover{background:var(--paper);border-color:var(--border)}
 .frow+.frow{margin-top:4px}
-.fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft);font-size:0.82rem}
+.fname{display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--ink-soft);font-size:0.82rem}
+.fname-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fname-actions{display:flex;align-items:center;gap:8px;font-size:0.72rem}
+.fname-actions a{color:var(--ink-muted);text-decoration:none}
+.fname-actions a:hover{color:var(--accent)}
 .frow-actions{display:flex;align-items:center;gap:6px}
 .btn-toggle{padding:5px 10px;font-size:0.74rem}
 .fpreview{grid-column:1 / -1;background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.78rem;line-height:1.75;color:var(--ink-soft);white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
 .fpreview[hidden]{display:none}
 .fpreview-label{font-size:0.7rem;font-weight:700;color:var(--ink-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.fpreview-meta{font-size:0.7rem;color:var(--ink-muted);margin-bottom:6px}
 .fpreview-empty{color:var(--ink-muted);font-style:italic}
 .dt-select{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:0.75rem;background:var(--paper);color:var(--ink);outline:none;font-family:inherit;cursor:pointer;transition:border-color .15s}
 .dt-select.changed{border-color:var(--warn);background:#fffbeb}
@@ -109,6 +114,11 @@ nav{display:flex;gap:2px}
 .ri-top{display:flex;align-items:flex-start;gap:9px;margin-bottom:7px}
 .ri-num{width:23px;height:23px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:0.74rem;font-weight:700;display:grid;place-items:center;flex-shrink:0}
 .ri-meta{font-size:0.75rem;color:var(--ink-muted);line-height:1.6}
+.ri-file-link{color:var(--accent);text-decoration:none;font-weight:600}
+.ri-file-link:hover{text-decoration:underline}
+.ri-file-actions{display:inline-flex;align-items:center;gap:6px;margin-left:6px}
+.ri-file-actions a{color:var(--ink-muted);text-decoration:none}
+.ri-file-actions a:hover{color:var(--accent)}
 .ri-text{font-size:0.8rem;color:var(--ink-soft);line-height:1.7;max-height:88px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .ri-score{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--ink-muted);margin-top:5px}
 .slog{background:#1a1a2e;color:#a8d8a8;border-radius:8px;padding:13px;font-family:'JetBrains Mono',monospace;font-size:0.76rem;line-height:1.7;max-height:260px;overflow-y:auto;margin-top:12px;display:none}
@@ -209,89 +219,11 @@ nav{display:flex;gap:2px}
 
 <!-- 企业管理 -->
 <div class="view" id="view-companies">
-  <div class="g2 companies-layout">
-
-    <!-- 左侧：新建企业 + 文件夹上传 -->
-    <div id="create-company-panel">
-      <div class="card">
-        <div class="ch"><span class="ic">➕</span>新建企业并上传资料</div>
-        <div class="cb">
-
-          <!-- Step 1: 填写企业信息 -->
-          <div class="step-row">
-            <span class="step-badge" id="step1-badge">1</span>
-            <div class="step-content">
-              <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">填写企业信息</div>
-              <div class="fg">
-                <label class="fl">企业 ID（唯一标识，建议英文+数字）</label>
-                <input class="fi" id="new-cid" placeholder="例：company_001"/>
-              </div>
-              <div class="fg" style="margin-bottom:0">
-                <label class="fl">企业名称</label>
-                <input class="fi" id="new-cname" placeholder="重庆××有限公司"/>
-              </div>
-            </div>
-          </div>
-
-          <div style="height:1px;background:var(--border);margin:12px 0"></div>
-
-          <!-- Step 2: 选择文件夹 -->
-          <div class="step-row">
-            <span class="step-badge" id="step2-badge">2</span>
-            <div class="step-content">
-              <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">选择企业资料文件夹</div>
-              <div class="folder-dz" id="folder-dz" onclick="document.getElementById('folder-input').click()">
-                <input type="file" id="folder-input" webkitdirectory multiple/>
-                <div style="font-size:2rem;opacity:.4;margin-bottom:8px">📁</div>
-                <div style="font-size:.87rem;color:var(--ink-soft);font-weight:500">点击选择文件夹</div>
-                <div style="font-size:.75rem;color:var(--ink-muted);margin-top:4px">支持整个目录，保持子目录结构</div>
-              </div>
-              <div id="folder-summary" style="display:none;margin-top:10px;padding:10px 12px;background:var(--paper);border-radius:8px;font-size:.82rem">
-                <div id="folder-summary-text"></div>
-                <div class="upload-file-list" id="folder-file-list"></div>
-              </div>
-            </div>
-          </div>
-
-          <div style="height:1px;background:var(--border);margin:12px 0"></div>
-
-          <!-- Step 3: 上传 -->
-          <div class="step-row">
-            <span class="step-badge" id="step3-badge">3</span>
-            <div class="step-content">
-              <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">上传文件到服务器</div>
-              <div class="prog" id="upload-prog"><div class="prog-bar" id="upload-bar" style="width:0"></div></div>
-              <div style="font-size:.73rem;color:var(--ink-muted);margin:4px 0 8px" id="upload-status"></div>
-              <button class="btn btn-p btn-fw" id="upload-btn" onclick="doFolderUpload()">
-                📤 上传文件夹
-              </button>
-            </div>
-          </div>
-
-          <div style="height:1px;background:var(--border);margin:12px 0"></div>
-
-          <!-- Step 4: 入库 -->
-          <div class="step-row">
-            <span class="step-badge" id="step4-badge">4</span>
-            <div class="step-content">
-              <div style="font-weight:600;font-size:.85rem;margin-bottom:4px">开始入库</div>
-              <div style="font-size:.78rem;color:var(--ink-muted);margin-bottom:8px">文件上传完成后，点击开始解析并写入知识库</div>
-              <button class="btn btn-p btn-fw" id="scan-async-btn" onclick="doNewScan(false)" disabled>
-                🚀 开始入库
-              </button>
-              <div class="slog" id="scan-log"></div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- 右侧：企业列表 -->
-    <div>
+  <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-weight:600;font-size:.95rem">企业列表</span>
         <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-p btn-sm" onclick="scrollToCreateCompany()">➕ 添加企业</button>
           <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
         </div>
       </div>
@@ -307,6 +239,7 @@ nav{display:flex;gap:2px}
           <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
           <span style="flex:1"></span>
           <input type="file" id="single-file-input" style="display:none" onchange="handleSingleFileUpload(this)"/>
+          <input type="file" id="replace-file-input" style="display:none" onchange="handleReplaceUpload(this)"/>
           <button class="btn btn-p btn-sm" id="upload-single-btn" onclick="document.getElementById('single-file-input').click()">📤 上传文件</button>
           <button class="btn btn-g btn-sm" onclick="closeDetail()" style="margin-left:6px">关闭</button>
         </div>
@@ -326,8 +259,76 @@ nav{display:flex;gap:2px}
         </div>
         <div class="slog" id="rescan-log" style="margin:0 12px 12px"></div>
       </div>
-    </div>
+  </div>
+</div>
 
+<div class="modal" id="m-create-company">
+  <div class="mbox" style="max-width:760px">
+    <button class="mclose" onclick="closeModal('m-create-company')">✕</button>
+    <div class="mtitle">新建企业并上传资料</div>
+    <div id="create-company-panel">
+      <div class="step-row">
+        <span class="step-badge" id="step1-badge">1</span>
+        <div class="step-content">
+          <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">填写企业信息</div>
+          <div class="fg">
+            <label class="fl">企业 ID（唯一标识，建议英文+数字）</label>
+            <input class="fi" id="new-cid" placeholder="例：company_001"/>
+          </div>
+          <div class="fg" style="margin-bottom:0">
+            <label class="fl">企业名称</label>
+            <input class="fi" id="new-cname" placeholder="重庆××有限公司"/>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+      <div class="step-row">
+        <span class="step-badge" id="step2-badge">2</span>
+        <div class="step-content">
+          <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">选择企业资料文件夹</div>
+          <div class="folder-dz" id="folder-dz" onclick="document.getElementById('folder-input').click()">
+            <input type="file" id="folder-input" webkitdirectory multiple/>
+            <div style="font-size:2rem;opacity:.4;margin-bottom:8px">📁</div>
+            <div style="font-size:.87rem;color:var(--ink-soft);font-weight:500">点击选择文件夹</div>
+            <div style="font-size:.75rem;color:var(--ink-muted);margin-top:4px">支持整个目录，保持子目录结构</div>
+          </div>
+          <div id="folder-summary" style="display:none;margin-top:10px;padding:10px 12px;background:var(--paper);border-radius:8px;font-size:.82rem">
+            <div id="folder-summary-text"></div>
+            <div class="upload-file-list" id="folder-file-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+      <div class="step-row">
+        <span class="step-badge" id="step3-badge">3</span>
+        <div class="step-content">
+          <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">上传文件到服务器</div>
+          <div class="prog" id="upload-prog"><div class="prog-bar" id="upload-bar" style="width:0"></div></div>
+          <div style="font-size:.73rem;color:var(--ink-muted);margin:4px 0 8px" id="upload-status"></div>
+          <button class="btn btn-p btn-fw" id="upload-btn" onclick="doFolderUpload()">
+            📤 上传文件夹
+          </button>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+      <div class="step-row" style="margin-bottom:0">
+        <span class="step-badge" id="step4-badge">4</span>
+        <div class="step-content">
+          <div style="font-weight:600;font-size:.85rem;margin-bottom:4px">开始入库</div>
+          <div style="font-size:.78rem;color:var(--ink-muted);margin-bottom:8px">文件上传完成后，点击开始解析并写入知识库</div>
+          <button class="btn btn-p btn-fw" id="scan-async-btn" onclick="doNewScan(false)" disabled>
+            🚀 开始入库
+          </button>
+          <div class="slog" id="scan-log"></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -341,7 +342,7 @@ nav{display:flex;gap:2px}
         <button class="btn btn-p" id="qbtn">🔍 搜索</button>
       </div>
       <div class="sopts">
-        <label>结果数：</label>
+        <label>Chunk数：</label>
         <select id="q-topk"><option>3</option><option selected>5</option><option>10</option><option>20</option></select>
         <label>企业：</label>
         <select id="q-company"><option value="">全部企业</option></select>
@@ -397,6 +398,8 @@ let healthData = {}, companies = [];
 let companyFilesCache = {};
 let folderFiles = [];       // 选中的文件列表
 let uploadedCompanyId = ''; // 上传成功后记录企业ID，用于入库
+let replaceTargetFileId = null;
+let replaceTargetFilename = null;
 
 // ── 视图切换 ──────────────────────────────────────────────────────────────
 function switchView(name) {
@@ -546,34 +549,61 @@ function renderFileList(files, cid) {
     const confirmBadge = f.doc_type_confirmed
       ? '<span class="tag tg-confirmed">✓ 已确认</span>'
       : '<span class="tag tg-auto">自动</span>';
+    const displayPath = f.file_path || f.filename;
+    const preview = fileAssetUrl(fileId, 'inline');
+    const download = fileAssetUrl(fileId, 'attachment');
     const dtOptions = DOC_TYPES.map(t =>
       `<option value="${t}" ${t===f.doc_type?'selected':''}>${TYPE_LABEL[t]||t}</option>`).join('');
     return `
     <div class="frow" id="frow-${fileId}">
-      <span class="fname" title="${f.filename}">📄 ${f.filename}</span>
+      <span class="fname" title="${displayPath}">
+        <span class="fname-path">📄 ${esc(displayPath)}</span>
+        <span class="fname-actions">
+          <a href="${preview}" target="_blank" rel="noopener noreferrer">预览</a>
+          <a href="${download}">下载</a>
+        </span>
+      </span>
       <select class="dt-select" id="dt-${fileId}" onchange="onDtChange('${fileId}',this)">${dtOptions}</select>
       <span>${confirmBadge}</span>
       <span class="tag ${STATUS_CLS[f.status]||'tg-unknown'}">${STATUS_LABEL[f.status]||f.status}</span>
       <div class="frow-actions">
         <button class="btn btn-g btn-sm" id="save-dt-${fileId}" style="display:none" onclick="saveDtType('${fileId}','${cid}')">💾 保存</button>
+        <button class="btn btn-g btn-sm" id="replace-${fileId}" onclick="chooseReplaceFile('${fileId}','${f.filename}')">♻️ 覆盖上传</button>
         <button class="btn btn-g btn-sm" id="reclassify-${fileId}" onclick="reclassifyFile('${fileId}','${cid}')">🏷 重分类</button>
         <button class="btn btn-g btn-sm btn-toggle" id="toggle-preview-${fileId}" onclick="togglePreview('${fileId}')">📖 原文</button>
         <button class="btn btn-warn btn-sm" id="repr-${fileId}" onclick="reprocessFile('${fileId}','${f.filename}')">🔄 重处理</button>
       </div>
-      <div class="fpreview" id="preview-${fileId}" hidden>
+      <div class="fpreview" id="preview-${fileId}" data-loaded="0" hidden>
         <div class="fpreview-label">解析原文预览</div>
-        ${f.preview_text ? esc(f.preview_text) : '<div class="fpreview-empty">暂无原文预览</div>'}
+        <div class="fpreview-meta" id="preview-meta-${fileId}">默认显示预览，展开时自动加载完整原文</div>
+        <div id="preview-body-${fileId}">${f.preview_text ? esc(f.preview_text) : '<div class="fpreview-empty">暂无原文预览</div>'}</div>
       </div>
     </div>`;
   }).join('');
 }
 
-function togglePreview(fileId) {
+async function togglePreview(fileId) {
   const panel = document.getElementById(`preview-${fileId}`);
   const btn = document.getElementById(`toggle-preview-${fileId}`);
+  const body = document.getElementById(`preview-body-${fileId}`);
+  const meta = document.getElementById(`preview-meta-${fileId}`);
   if (!panel || !btn) return;
   const willOpen = panel.hasAttribute('hidden');
   if (willOpen) {
+    if (panel.dataset.loaded !== '1' && body && meta) {
+      body.innerHTML = '<div class="fpreview-empty">正在加载完整原文...</div>';
+      try {
+        const r = await fetch(`/api/files/${fileId}/content`);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || '加载失败');
+        body.innerHTML = data.full_text ? esc(data.full_text) : '<div class="fpreview-empty">暂无完整原文</div>';
+        meta.textContent = `完整原文，按全部 chunk 拼接，共 ${data.chunk_count || 0} 段`;
+        panel.dataset.loaded = '1';
+      } catch (e) {
+        body.innerHTML = `<div class="fpreview-empty">加载失败：${esc(e.message || '未知错误')}</div>`;
+        meta.textContent = '完整原文加载失败';
+      }
+    }
     panel.removeAttribute('hidden');
     btn.textContent = '📕 收起';
   } else {
@@ -585,6 +615,12 @@ function togglePreview(fileId) {
 function onDtChange(fileId, sel) {
   document.getElementById(`save-dt-${fileId}`).style.display = 'inline-flex';
   sel.classList.add('changed');
+}
+
+function chooseReplaceFile(fileId, filename) {
+  replaceTargetFileId = fileId;
+  replaceTargetFilename = filename;
+  document.getElementById('replace-file-input').click();
 }
 
 async function saveDtType(fileId, cid) {
@@ -649,9 +685,56 @@ async function reclassifyFile(fileId, cid) {
   }
 }
 
+async function handleReplaceUpload(input) {
+  const file = input.files && input.files[0];
+  if (!file || !replaceTargetFileId) {
+    input.value = '';
+    return;
+  }
+
+  const fileId = replaceTargetFileId;
+  const filename = replaceTargetFilename || file.name;
+  const btn = document.getElementById(`replace-${fileId}`);
+  const oldText = btn ? btn.innerHTML : '♻️ 覆盖上传';
+
+  if (!confirm(`用 ${file.name} 覆盖 ${filename} 并重新入库？`)) {
+    input.value = '';
+    replaceTargetFileId = null;
+    replaceTargetFilename = null;
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin">♻️</span>';
+  }
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const r = await fetch(`/api/files/${fileId}/replace`, {method:'POST', body: fd});
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '覆盖上传失败');
+    toast(`${filename} 已覆盖并提交重新入库`, 'success');
+    await loadCompaniesData();
+    if (selectedCid) await selectCompany(selectedCid);
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+    }
+    input.value = '';
+    replaceTargetFileId = null;
+    replaceTargetFilename = null;
+  }
+}
+
 function closeDetail() {
   document.getElementById('company-detail').style.display = 'none';
   document.getElementById('single-file-input').value = '';
+  document.getElementById('replace-file-input').value = '';
   selectedCid = null; loadCompanies();
 }
 
@@ -854,8 +937,8 @@ async function _doScan(cid, sync, logId, btnAsync) {
 
 function scrollToCreateCompany() {
   switchView('companies');
-  document.getElementById('create-company-panel')?.scrollIntoView({behavior:'smooth', block:'start'});
-  document.getElementById('new-cid')?.focus();
+  openModal('m-create-company');
+  setTimeout(() => document.getElementById('new-cid')?.focus(), 0);
 }
 
 // ── 智能问答 ──────────────────────────────────────────────────────────────
@@ -896,7 +979,7 @@ async function doSearch() {
             <div class="ri-meta">
               ${h.company_id?`<span class="tag tg-document" style="margin-right:5px">🏢 ${h.company_id}</span>`:''}
               <span class="tag tg-${h.doc_type||'unknown'}">${TYPE_LABEL[h.doc_type]||h.doc_type||'未知'}</span>
-              <span style="margin-left:6px;font-weight:500">${(h.source||'').split('/').pop()}</span>
+              <span style="margin-left:6px">${renderResultFileLink(h)}</span>
             </div>
           </div>
           <div class="ri-text">${esc(h.content||'')}</div>
@@ -912,6 +995,24 @@ async function doSearch() {
 }
 
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+function fileAssetUrl(fileId, disposition='inline') {
+  return `/api/files/${encodeURIComponent(fileId)}/asset?disposition=${encodeURIComponent(disposition)}`;
+}
+function renderResultFileLink(hit) {
+  const fileId = hit.file_id || '';
+  const fileName = (hit.source || '').split('/').pop() || '未命名文件';
+  const safeName = esc(fileName);
+  if (!fileId) return `<span style="font-weight:500">${safeName}</span>`;
+  const preview = fileAssetUrl(fileId, 'inline');
+  const download = fileAssetUrl(fileId, 'attachment');
+  return `
+    <a class="ri-file-link" href="${preview}" target="_blank" rel="noopener noreferrer">${safeName}</a>
+    <span class="ri-file-actions">
+      <a href="${preview}" target="_blank" rel="noopener noreferrer" title="浏览器预览">预览</a>
+      <a href="${download}" title="下载文件">下载</a>
+    </span>
+  `;
+}
 document.getElementById('qbtn').addEventListener('click', doSearch);
 document.getElementById('qi').addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
 

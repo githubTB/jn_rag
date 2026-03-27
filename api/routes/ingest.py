@@ -9,8 +9,11 @@ POST   /api/ingest/scan/{company_id}       扫描目录批量入库（Celery 异
 GET    /api/ingest/status/{file_id}        查询入库状态
 GET    /api/task/{task_id}                 查询 Celery 任务状态
 GET    /api/files                          已入库文件列表
+GET    /api/files/{file_id}/content        查看文件完整解析原文
+GET    /api/files/{file_id}/asset          下载或浏览器预览原文件
 DELETE /api/files/{file_id}                删除文件
 PATCH  /api/files/{file_id}/doc_type       人工修改文件类型
+POST   /api/files/{file_id}/replace        覆盖上传并重新入库
 POST   /api/files/{file_id}/reprocess      重新处理文件
 POST   /api/files/{file_id}/reclassify     按已入库内容重新分类
 
@@ -23,10 +26,11 @@ DELETE /api/companies/{company_id}         删除企业
 from __future__ import annotations
 
 import logging
+import mimetypes
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from config.settings import settings
@@ -191,6 +195,7 @@ async def scan_company_dir(
         raise HTTPException(status_code=404, detail=f"目录不存在: {scan_dir}")
 
     all_files: list[Path] = []
+    skipped_existing: list[str] = []
     for f in scan_dir.rglob("*"):
         if not f.is_file():
             continue
@@ -203,11 +208,19 @@ async def scan_company_dir(
             continue
         if f.suffix.lower() not in (_ALLOWED_EXTENSIONS | {".doc", ".docm"}):
             continue
+        if not Dedup.is_file_new(prepared):
+            skipped_existing.append(prepared.name)
+            continue
         all_files.append(prepared)
 
     if not all_files:
-        return JSONResponse({"status": "empty", "company_id": company_id,
-                             "message": "目录下没有找到支持的文件"})
+        message = "目录下没有找到需要入库的新文件" if skipped_existing else "目录下没有找到支持的文件"
+        return JSONResponse({
+            "status": "empty",
+            "company_id": company_id,
+            "message": message,
+            "skipped_existing": len(skipped_existing),
+        })
 
     tasks = [{
         "path": str(f),
@@ -230,8 +243,9 @@ async def scan_company_dir(
             "task_id":    job.id,
             "company_id": company_id,
             "total":      len(tasks),
+            "skipped_existing": len(skipped_existing),
             "files":      [{"file": Path(t["path"]).name, "doc_type": t["doc_type"]} for t in tasks],
-            "message":    f"已提交 {len(tasks)} 个文件到队列，Worker 正在处理",
+            "message":    f"已提交 {len(tasks)} 个新文件到队列，跳过 {len(skipped_existing)} 个已入库文件",
         }, status_code=202)
 
 
@@ -304,6 +318,63 @@ async def list_files(
     })
 
 
+@router.get("/files/{file_id}/content")
+async def get_file_content(file_id: str):
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]
+            file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    chunks = _query_file_chunks(file_id, limit=512)
+    full_text = _merge_chunk_text(chunks, max_chars=None)
+
+    return JSONResponse({
+        "file_id": file_id,
+        "filename": record["filename"],
+        "doc_type": record["doc_type"],
+        "status": record["status"],
+        "full_text": full_text,
+        "chunk_count": len(chunks),
+    })
+
+
+@router.get("/files/{file_id}/asset")
+async def get_file_asset(
+    file_id: str,
+    disposition: str = Query("inline", pattern="^(inline|attachment)$"),
+):
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]
+            file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    file_path = Path(record["file_path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"原始文件不存在: {file_path}")
+
+    media_type, _ = mimetypes.guess_type(str(file_path))
+    return FileResponse(
+        path=str(file_path),
+        filename=record["filename"],
+        media_type=media_type or "application/octet-stream",
+        content_disposition_type=disposition,
+    )
+
+
 # ---------------------------------------------------------------------------
 # DELETE /api/files/{file_id}
 # ---------------------------------------------------------------------------
@@ -361,6 +432,76 @@ async def update_doc_type(file_id: str, body: DocTypeUpdate):
         "doc_type_confirmed": body.confirmed,
         "message":            "doc_type 已更新，如需重新解析请调用 reprocess 接口",
     })
+
+
+# ---------------------------------------------------------------------------
+# POST /api/files/{file_id}/replace
+# ---------------------------------------------------------------------------
+
+@router.post("/files/{file_id}/replace")
+async def replace_file(
+    file_id: str,
+    file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    sync: bool = False,
+):
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]
+            file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    target_path = Path(record["file_path"])
+    current_ext = target_path.suffix.lower()
+    incoming_name = file.filename or record["filename"]
+    incoming_ext = Path(incoming_name).suffix.lower()
+    if current_ext and incoming_ext and current_ext != incoming_ext:
+        raise HTTPException(status_code=400, detail=f"覆盖文件后缀不一致: {incoming_ext} != {current_ext}")
+
+    content = await file.read()
+    size_mb = len(content) / 1024 / 1024
+    if size_mb > _MAX_UPLOAD_MB:
+        raise HTTPException(status_code=413, detail=f"文件过大: {size_mb:.1f} MB")
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(content)
+
+    try:
+        Embedder.delete_by_file(file_id)
+    except Exception as exc:
+        logger.warning("[Replace] Milvus 删除失败: %s", exc)
+    Dedup.delete_file(file_id)
+
+    kwargs = dict(
+        company_id=record["company_id"],
+        doc_type=record["doc_type"],
+        doc_type_confirmed=bool(record.get("doc_type_confirmed", 0)),
+        force=True,
+    )
+
+    if sync:
+        result = IngestTask.run(str(target_path), **kwargs)
+        return JSONResponse({
+            **result,
+            "replaced": True,
+            "old_file_id": file_id,
+            "filename": record["filename"],
+        })
+
+    background_tasks.add_task(IngestTask.run, str(target_path), **kwargs)
+    return JSONResponse({
+        "status": "processing",
+        "replaced": True,
+        "old_file_id": file_id,
+        "filename": record["filename"],
+        "message": "源文件已覆盖，正在重新入库",
+    }, status_code=202)
 
 
 # ---------------------------------------------------------------------------
@@ -513,6 +654,7 @@ async def get_company(company_id: str):
         "files": [{
             "file_id":            f["id"],
             "filename":           f["filename"],
+            "file_path":          f["file_path"],
             "doc_type":           f["doc_type"],
             "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
             "status":             f["status"],
@@ -579,41 +721,12 @@ def _build_file_preview(file_id: str, status: str, max_chars: int = 1200) -> str
     if status != "done":
         return ""
 
-    try:
-        chunks = Embedder.query_chunks_by_file(file_id=file_id, limit=12)
-    except Exception as exc:
-        logger.warning("[Companies] 读取文件预览失败: file_id=%s err=%s", file_id[:12], exc)
-        return ""
-
-    if not chunks:
-        return ""
-
-    chunks = sorted(chunks, key=lambda item: (item.get("chunk_index") is None, item.get("chunk_index", 0)))
-    merged: list[str] = []
-    total = 0
-
-    for chunk in chunks:
-        text = str(chunk.get("raw_content") or chunk.get("content") or "").strip()
-        if not text:
-            continue
-        if total >= max_chars:
-            break
-        remaining = max_chars - total
-        if len(text) > remaining:
-            text = text[:remaining].rstrip() + "..."
-        merged.append(text)
-        total += len(text)
-
-    return "\n\n".join(merged).strip()
+    chunks = _query_file_chunks(file_id, limit=12)
+    return _merge_chunk_text(chunks, max_chars=max_chars)
 
 
 def _load_docs_for_reclassify(record: dict, limit: int = 24) -> list[Document]:
-    try:
-        chunks = Embedder.query_chunks_by_file(file_id=record["id"], limit=limit)
-    except Exception as exc:
-        logger.warning("[Reclassify] 读取 chunk 失败: file_id=%s err=%s", record["id"][:12], exc)
-        return []
-
+    chunks = _query_file_chunks(record["id"], limit=limit, log_prefix="Reclassify")
     docs: list[Document] = []
     ordered = sorted(chunks, key=lambda item: (item.get("chunk_index") is None, item.get("chunk_index", 0)))
     for idx, chunk in enumerate(ordered):
@@ -629,4 +742,39 @@ def _load_docs_for_reclassify(record: dict, limit: int = 24) -> list[Document]:
             },
         ))
     return docs
+
+
+def _query_file_chunks(file_id: str, *, limit: int, log_prefix: str = "Companies") -> list[dict]:
+    try:
+        return Embedder.query_chunks_by_file(file_id=file_id, limit=limit)
+    except Exception as exc:
+        logger.warning("[%s] 读取 chunk 失败: file_id=%s err=%s", log_prefix, file_id[:12], exc)
+        return []
+
+
+def _merge_chunk_text(chunks: list[dict], max_chars: int | None) -> str:
+    if not chunks:
+        return ""
+
+    ordered = sorted(chunks, key=lambda item: (item.get("chunk_index") is None, item.get("chunk_index", 0)))
+    merged: list[str] = []
+    total = 0
+
+    for idx, chunk in enumerate(ordered, start=1):
+        text = str(chunk.get("raw_content") or chunk.get("content") or "").strip()
+        if not text:
+            continue
+        chunk_no = chunk.get("chunk_index")
+        chunk_label = f"Chunk #{chunk_no}" if chunk_no is not None else f"Chunk {idx}"
+        block = f"===== {chunk_label} =====\n{text}"
+        if max_chars is not None and total >= max_chars:
+            break
+        if max_chars is not None:
+            remaining = max_chars - total
+            if len(block) > remaining:
+                block = block[:remaining].rstrip() + "..."
+        merged.append(block)
+        total += len(block)
+
+    return "\n\n".join(merged).strip()
     
