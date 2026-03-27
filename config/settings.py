@@ -29,6 +29,7 @@ settings.py — 项目全局配置。
     # OCR
     VL_BACKEND=vllm-server
     VL_SERVER_URL=http://117.x.x.x:8118/v1
+    VL_OCR_MODEL=paddleocr-vl:latest
     VL_DEVICE=
 """
 
@@ -91,9 +92,10 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(0.3, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(2048, ge=1)
 
-    # ── OCR（PaddleOCR-VL）───────────────────────────────────────────
+    # ── OCR（glm-OCR）─────────────────────────────────────────────────
     vl_backend: str | None = Field(None, description="none=本地cpu / vllm-server 等")
     vl_server_url: str | None = Field(None, description="vLLM 服务地址")
+    vl_ocr_model: str | None = Field("glm-ocr:latest", description="OCR 模型，None=本地cpu")
     vl_device: str | None = Field(None, description="OCR 推理设备，None=自动")
     vl_max_file_mb: float = Field(50.0, description="OCR 图片大小上限 MB")
 

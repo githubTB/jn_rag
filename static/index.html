@@ -336,7 +336,7 @@ nav{display:flex;gap:2px}
       </div>
       <div class="sopts">
         <label>结果数：</label>
-        <select id="q-topk"><option>3</option><option selected>5</option><option>10</option><option>20</option><option>50</option><option>100</option></select>
+        <select id="q-topk"><option>3</option><option selected>5</option><option>10</option><option>20</option></select>
         <label>企业：</label>
         <select id="q-company"><option value="">全部企业</option></select>
         <label>优先文件：</label>
@@ -434,7 +434,7 @@ function showHealth() {
     ['Milvus',  d.milvus ? '<span class="ok">✓ 已连接</span>' : '<span class="fail">✗ 未连接</span>'],
     ['向量模型',d.embed_model||'-'],
     ['Reranker',  d.reranker_model||'-'],
-    ['OCR 后端',d.vl_backend||'本地'],
+    ['OCR 后端',d.vl_ocr_model||'本地'],
     ['对话模型',d.llm_model||'-'],
     ['LLM 地址',d.llm_api_base||'-'],
   ].map(([k,v]) => `<div class="hrow"><span class="hkey">${k}</span><span class="hval">${v}</span></div>`).join('');
@@ -467,7 +467,7 @@ async function loadOverview() {
     `Milvus：<strong>${d.milvus?'✓ 在线':'✗ 离线'}</strong>  ${d.milvus_host||'localhost'}:${d.milvus_port||19530}`,
     `向量模型：<strong>${d.embed_model||'-'}</strong>`,
     `Reranker：<strong>${d.reranker_model||'-'}</strong>`,
-    `OCR：<strong>${d.vl_backend||'本地'}</strong>`,
+    `OCR：<strong>${d.vl_ocr_model||'本地'}</strong>`,
     `LLM：<strong>${d.llm_model||'-'}</strong>`,
   ].map(s=>`<div>${s}</div>`).join('');
 

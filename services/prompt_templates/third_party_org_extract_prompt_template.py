@@ -5,7 +5,7 @@
 SERVICE_NAME = "third_party_org_extract_prompt_template"
 
 # 检索问题/抽取主题默认值
-q = "提取企业关于绿色生产水平评估报告的第三方机构相关数值情况"
+q = "提取{company_name}的关于绿色生产水平评估报告的第三方机构相关数值情况"
 
 # system 提示词
 system_prompt = system_prompt = """

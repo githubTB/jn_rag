@@ -135,6 +135,15 @@ def _resolve_with_service_default(
     return incoming
 
 
+def _render_template_vars(template: str, **kwargs: str | None) -> str:
+    values = {k: (v or "") for k, v in kwargs.items()}
+    try:
+        return template.format(**values)
+    except KeyError as exc:
+        missing = exc.args[0]
+        raise HTTPException(status_code=400, detail=f"模板变量缺失: {missing}") from exc
+
+
 def _preview_for_log(text: str, limit: int = 1200) -> str:
     compact = " ".join(text.split())
     if len(compact) <= limit:
@@ -438,6 +447,24 @@ async def query_extract(body: QueryExtractRequest):
         company = Dedup.get_company(body.company_id)
         if company:
             company_name = company.get("name")
+
+    request_q = _render_template_vars(
+        request_q,
+        company_name=company_name,
+        company_id=body.company_id,
+    )
+    request_system_prompt = _render_template_vars(
+        request_system_prompt,
+        company_name=company_name,
+        company_id=body.company_id,
+        text="",
+    )
+    request_user_prompt_template = _render_template_vars(
+        request_user_prompt_template,
+        company_name=company_name,
+        company_id=body.company_id,
+        text="{text}",
+    )
 
     hits, reranker_used = _retrieve_hits(
         q=request_q,
