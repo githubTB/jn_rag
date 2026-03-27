@@ -515,9 +515,10 @@ def _guess_doc_type(file_path: Path) -> str:
         if any(k.lower() in path_str for k in keywords):
             return dt
 
-    # 图片默认走 nameplate（后续可由识别内容再细分）
+    # 🆕 图片文件:先返回 unknown,让后续 OCR 结果来判断
     if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif"}:
-        return "nameplate"
+        return "unknown"  # ✅ 改为 unknown,等 OCR 推断
+    
     return "document"
 
 

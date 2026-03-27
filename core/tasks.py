@@ -147,7 +147,17 @@ class IngestTask:
 
         docs = ExtractProcessor.extract(str(path), **ocr_defaults)
         logger.info("[Task] 解析完成: %d doc，%.2fs", len(docs), time.perf_counter() - t0)
-
+        
+        # 🆕 如果当前 doc_type 是 unknown,且 OCR 返回了推断结果,则使用推断结果
+        if doc_type == DocType.UNKNOWN and docs:
+            inferred = docs[0].metadata.get('inferred_doc_type')
+            if inferred and inferred in DocType.ALL:
+                doc_type = inferred
+                logger.info("[Task] OCR 推断文档类型: %s → %s", path.name, doc_type)
+                
+                # 更新数据库中的 doc_type
+                Dedup.update_doc_type(file_id, doc_type, confirmed=False)
+    
         for i, doc in enumerate(docs):
             logger.debug("[Task]   doc[%d] label=%s 字符=%d 内容: %r",
                          i, doc.metadata.get("label","?"),
