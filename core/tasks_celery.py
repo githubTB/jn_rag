@@ -27,6 +27,7 @@ def ingest_file(
     file_path: str,
     company_id: str | None = None,
     doc_type: str = "unknown",
+    doc_type_confirmed: bool = False,
     force: bool = False,
 ) -> dict:
     """
@@ -50,6 +51,7 @@ def ingest_file(
             file_path,
             company_id=company_id,
             doc_type=doc_type,
+            doc_type_confirmed=doc_type_confirmed,
             force=force,
         )
         logger.info("[CeleryTask] 完成: %s  status=%s", Path(file_path).name, result.get("status"))
@@ -92,6 +94,7 @@ def ingest_batch(
     for i, task in enumerate(tasks, 1):
         file_path = task["path"]
         doc_type  = task.get("doc_type", "unknown")
+        doc_type_confirmed = bool(task.get("doc_type_confirmed", False))
         fname     = Path(file_path).name
 
         logger.info("[CeleryBatch] %d/%d  %s", i, total, fname)
@@ -101,6 +104,7 @@ def ingest_batch(
                 file_path,
                 company_id=company_id,
                 doc_type=doc_type,
+                doc_type_confirmed=doc_type_confirmed,
             )
             status = result.get("status", "unknown")
             results.append({"file": fname, "doc_type": doc_type,

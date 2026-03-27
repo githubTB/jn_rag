@@ -22,6 +22,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from core.doc_type_classifier import classify_doc_type
 from .base import BaseExtractor
 from models.document import Document
 
@@ -159,56 +160,13 @@ class ImageExtractor(BaseExtractor):
 
         logger.info("[OCR] 输出共 %d 字符", sum(len(d.page_content) for d in docs))
         
-        inferred_type = self._infer_doc_type(docs)
+        decision = classify_doc_type(docs, file_path=self._file_path)
         for doc in docs:
-            doc.metadata['inferred_doc_type'] = inferred_type
+            doc.metadata["inferred_doc_type"] = decision.doc_type
+            doc.metadata["doc_type_confidence"] = decision.confidence
+            doc.metadata["doc_type_evidence"] = decision.evidence
         
         return docs
-
-    def _infer_doc_type(self, docs: list[Document]) -> str:
-        """
-        基于 OCR 识别结果推断文档类型
-        
-        规则:
-        - 主要是 table 标签 → table
-        - 包含"营业执照"等关键词 → license  
-        - 包含"发票"/"金额"等 → invoice
-        - 包含设备型号/铭牌特征 → nameplate
-        - 其他 → document
-        """
-        if not docs:
-            return "unknown"
-        
-        # 统计各类 label
-        labels = [doc.metadata.get('label', '') for doc in docs]
-        label_counts = {}
-        for label in labels:
-            label_counts[label] = label_counts.get(label, 0) + 1
-        
-        # 合并所有文本用于关键词匹配
-        all_text = '\n'.join(doc.page_content for doc in docs).lower()
-        
-        # 规则1: 主要是表格
-        if label_counts.get('table', 0) > len(docs) * 0.6:
-            return "table"
-        
-        # 规则2: 营业执照关键词
-        license_keywords = ['营业执照', '统一社会信用代码', '法定代表人', '注册资本']
-        if sum(kw in all_text for kw in license_keywords) >= 2:
-            return "license"
-        
-        # 规则3: 发票特征
-        invoice_keywords = ['发票', '金额', '税率', '价税合计', '开票日期']
-        if sum(kw in all_text for kw in invoice_keywords) >= 2:
-            return "invoice"
-        
-        # 规则4: 设备铭牌特征
-        nameplate_keywords = ['型号', '额定功率', '制造商', '出厂日期', '产品编号', 'model', 'serial']
-        if sum(kw in all_text for kw in nameplate_keywords) >= 2:
-            return "nameplate"
-        
-        # 规则5: 默认文档
-        return "document"
 
     # ------------------------------------------------------------------
     #  Ollama GLM-OCR 后端

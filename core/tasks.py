@@ -30,11 +30,31 @@ from pathlib import Path
 
 from config.settings import settings
 from core.dedup import Dedup, DocType
+from core.doc_type_classifier import classify_doc_type
 from core.embedder import Embedder
 from extract_processor import ExtractProcessor
 from extractor.doc_chunker import DocChunker
 
 logger = logging.getLogger(__name__)
+
+
+_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif"}
+
+
+def _should_auto_classify(path: Path, docs: list) -> bool:
+    """
+    业务 doc_type 自动细分只发生在两类特殊输入上：
+    1. 原始图片文件
+    2. 走过 OCR / 版面识别的 PDF
+    其他固定格式（docx/pptx/html/text 等）不在这里重判业务类型。
+    """
+    suffix = path.suffix.lower()
+    if suffix in _IMAGE_SUFFIXES:
+        return True
+    if suffix != ".pdf":
+        return False
+    labels = {str(doc.metadata.get("label", "")).lower() for doc in docs}
+    return any(label and label != "page" for label in labels)
 
 
 class IngestTask:
@@ -47,6 +67,7 @@ class IngestTask:
         *,
         company_id: str | None = None,
         doc_type: str = DocType.UNKNOWN,
+        doc_type_confirmed: bool = False,
         force: bool = False,
         extract_kwargs: dict | None = None,
     ) -> dict:
@@ -88,6 +109,7 @@ class IngestTask:
             path,
             company_id=company_id,
             doc_type=doc_type,
+            doc_type_confirmed=doc_type_confirmed,
         )
         logger.info("[Task] file_id: %s", file_id[:16])
 
@@ -148,14 +170,22 @@ class IngestTask:
         docs = ExtractProcessor.extract(str(path), **ocr_defaults)
         logger.info("[Task] 解析完成: %d doc，%.2fs", len(docs), time.perf_counter() - t0)
         
-        # 🆕 如果当前 doc_type 是 unknown,且 OCR 返回了推断结果,则使用推断结果
-        if doc_type == DocType.UNKNOWN and docs:
-            inferred = docs[0].metadata.get('inferred_doc_type')
-            if inferred and inferred in DocType.ALL:
-                doc_type = inferred
-                logger.info("[Task] OCR 推断文档类型: %s → %s", path.name, doc_type)
-                
-                # 更新数据库中的 doc_type
+        record = Dedup.get_file(file_id) or {}
+        auto_classify = not bool(record.get("doc_type_confirmed", 0))
+        if auto_classify and docs and _should_auto_classify(path, docs):
+            decision = classify_doc_type(docs, file_path=path)
+            inferred = docs[0].metadata.get("inferred_doc_type")
+            candidate = inferred if inferred in DocType.ALL else decision.doc_type
+            if candidate in DocType.ALL and candidate != doc_type:
+                logger.info(
+                    "[Task] 内容分类更新文档类型: %s %s → %s (confidence=%.2f evidence=%s)",
+                    path.name,
+                    doc_type,
+                    candidate,
+                    decision.confidence,
+                    ",".join(decision.evidence),
+                )
+                doc_type = candidate
                 Dedup.update_doc_type(file_id, doc_type, confirmed=False)
     
         for i, doc in enumerate(docs):

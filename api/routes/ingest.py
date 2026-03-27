@@ -120,6 +120,7 @@ async def ingest(
         raise HTTPException(status_code=404,
             detail=f"企业不存在: {company_id}，请先通过 POST /api/companies 创建")
 
+    doc_type_confirmed = doc_type is not None
     if doc_type is None:
         doc_type = _guess_doc_type(Path(file.filename or "unknown"))
     elif doc_type not in DocType.ALL:
@@ -154,7 +155,11 @@ async def ingest(
         return JSONResponse({"status": "skipped", "reason": "文件内容已入库",
                              "file_id": file_id, "file": existing.get("filename", filename)})
 
-    kwargs = dict(company_id=company_id, doc_type=doc_type)
+    kwargs = dict(
+        company_id=company_id,
+        doc_type=doc_type,
+        doc_type_confirmed=doc_type_confirmed,
+    )
     if sync:
         result = IngestTask.run(str(save_path), **kwargs)
         return JSONResponse(result)
@@ -201,7 +206,11 @@ async def scan_company_dir(
         return JSONResponse({"status": "empty", "company_id": company_id,
                              "message": "目录下没有找到支持的文件"})
 
-    tasks = [{"path": str(f), "doc_type": doc_type or _guess_doc_type(f)}
+    tasks = [{
+        "path": str(f),
+        "doc_type": doc_type or _guess_doc_type(f),
+        "doc_type_confirmed": doc_type is not None,
+    }
              for f in all_files]
 
     from core.tasks_celery import ingest_batch
@@ -387,7 +396,12 @@ async def reprocess_file(
     with Dedup._get_conn_ctx() as conn:
         conn.execute("UPDATE files SET status = 'pending' WHERE id = ?", (file_id,))
 
-    kwargs = dict(company_id=record["company_id"], doc_type=record["doc_type"], force=True)
+    kwargs = dict(
+        company_id=record["company_id"],
+        doc_type=record["doc_type"],
+        doc_type_confirmed=bool(record.get("doc_type_confirmed", 0)),
+        force=True,
+    )
 
     if sync:
         result = IngestTask.run(str(file_path), **kwargs)
@@ -479,16 +493,8 @@ async def delete_company(company_id: str):
 # 工具函数
 # ---------------------------------------------------------------------------
 
-_PATH_RULES: list[tuple[list[str], str]] = [
-    (["营业执照", "执照", "license", "证照", "信用中国"],                      "license"),
-    (["排污许可", "许可证"],                                                  "license"),
-    (["现场照片", "铭牌", "nameplate", "设备铭牌"],                          "nameplate"),
-    (["统计表", "汇总", "台账", "明细", "一览表"],                                "table"),
-    (["发票", "invoice", "单据", "收据"],                                     "invoice"),
-]
-
 _EXT_RULES: dict[str, str] = {
-    # 结构化表格文件：按扩展名直接判定为 table
+    # 结构化文件：扩展名足以决定提取路线和业务类型
     ".xlsx": "table",
     ".xls": "table",
     ".csv": "table",
@@ -501,15 +507,12 @@ def _guess_doc_type(file_path: Path) -> str:
     if ext_type:
         return ext_type
 
-    path_str = "/".join(file_path.parts).lower()
-    for keywords, dt in _PATH_RULES:
-        if any(k.lower() in path_str for k in keywords):
-            return dt
+    if suffix in {".pdf", ".docx", ".docm", ".pptx"}:
+        return "document"
 
-    # 🆕 图片文件:先返回 unknown,让后续 OCR 结果来判断
     if suffix in {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif"}:
-        return "unknown"  # ✅ 改为 unknown,等 OCR 推断
-    
+        return "unknown"
+
     return "document"
 
 

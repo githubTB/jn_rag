@@ -1,5 +1,23 @@
 """
-ExtractProcessor — dispatch file extraction by extension.
+ExtractProcessor — route files to fixed-format extractors by suffix.
+
+职责边界
+--------
+- 本模块只负责“按文件后缀选择解析器”
+- 不负责业务文档分类（license / invoice / nameplate 等）
+- `pdf` 和 `image` 是特殊解析器：
+  - `pdf` 先尝试文字层提取，扫描件再降级到 OCR
+  - `image` 直接走 OCR / 版面结构识别
+
+固定格式路由
+------------
+- `.csv`               -> CSVExtractor
+- `.xlsx` / `.xls`     -> ExcelExtractor
+- `.docx` / `.docm`    -> WordExtractor
+- `.pptx`              -> PptxExtractor
+- `.md` / `.html` 等   -> 对应文本类解析器
+- 图片后缀             -> ImageExtractor
+- `.pdf`               -> PdfExtractor
 
 Quick start
 -----------
@@ -19,15 +37,8 @@ Per-extractor kwargs (forwarded automatically)
     # PDF: mark image objects on each page
     ExtractProcessor.extract("report.pdf", extract_images=True)
 
-    # Image: Tesseract language
-    ExtractProcessor.extract("scan.jpg", ocr_lang="eng")
-
-    # Image: pre-processing before OCR
-    ExtractProcessor.extract("photo.png", preprocess="grey")   # greyscale
-    ExtractProcessor.extract("photo.png", preprocess="thresh") # threshold
-
-    # Image: Tesseract page-segmentation mode
-    ExtractProcessor.extract("labels.png", psm=11)
+    # Image / PDF: OCR-related kwargs are forwarded only to special extractors
+    ExtractProcessor.extract("scan.jpg", output_format="markdown")
 """
 
 from __future__ import annotations
@@ -67,13 +78,13 @@ _EXT_MAP: dict[str, type[BaseExtractor]] = {
     ".csv":      CSVExtractor,
     ".xlsx":     ExcelExtractor,
     ".xls":      ExcelExtractor,
-    # Documents
+    # Documents / special parsers
     ".pdf":      PdfExtractor,
     ".docx":     WordExtractor,
     ".docm":     WordExtractor,
     # Presentations
     ".pptx":     PptxExtractor,
-    # Images (Tesseract OCR)
+    # Images (OCR / layout analysis)
     ".jpg":      ImageExtractor,
     ".jpeg":     ImageExtractor,
     ".png":      ImageExtractor,
@@ -86,7 +97,7 @@ _EXT_MAP: dict[str, type[BaseExtractor]] = {
 
 
 class ExtractProcessor:
-    """Dispatch file extraction to the correct extractor by file extension."""
+    """Choose the correct extractor from the file suffix."""
 
     @classmethod
     def extract(cls, file_path: str, **kwargs) -> list[Document]:
@@ -108,6 +119,6 @@ class ExtractProcessor:
         extractor_cls = _EXT_MAP.get(ext, TextExtractor)
         if ext not in _EXT_MAP:
             logger.warning("Unknown extension %r — falling back to TextExtractor", ext)
-        # Forward only kwargs the extractor's __init__ accepts
+        # ExtractProcessor only does suffix routing; kwargs are filtered per extractor.
         accepted = set(inspect.signature(extractor_cls.__init__).parameters) - {"self"}
         return extractor_cls(file_path, **{k: v for k, v in kwargs.items() if k in accepted})
