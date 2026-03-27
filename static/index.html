@@ -89,6 +89,11 @@ nav{display:flex;gap:2px}
 .frow+.frow{margin-top:4px}
 .fname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-soft);font-size:0.82rem}
 .frow-actions{display:flex;align-items:center;gap:6px}
+.btn-toggle{padding:5px 10px;font-size:0.74rem}
+.fpreview{grid-column:1 / -1;background:var(--paper);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:0.78rem;line-height:1.75;color:var(--ink-soft);white-space:pre-wrap;word-break:break-word;max-height:220px;overflow:auto}
+.fpreview[hidden]{display:none}
+.fpreview-label{font-size:0.7rem;font-weight:700;color:var(--ink-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.fpreview-empty{color:var(--ink-muted);font-style:italic}
 .dt-select{border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:0.75rem;background:var(--paper);color:var(--ink);outline:none;font-family:inherit;cursor:pointer;transition:border-color .15s}
 .dt-select.changed{border-color:var(--warn);background:#fffbeb}
 .sbar{display:flex;gap:10px}
@@ -287,7 +292,6 @@ nav{display:flex;gap:2px}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-weight:600;font-size:.95rem">企业列表</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-p btn-sm" onclick="scrollToCreateCompany()">➕ 添加企业</button>
           <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
         </div>
       </div>
@@ -302,6 +306,8 @@ nav{display:flex;gap:2px}
           <span id="detail-name"></span>
           <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
           <span style="flex:1"></span>
+          <input type="file" id="single-file-input" style="display:none" onchange="handleSingleFileUpload(this)"/>
+          <button class="btn btn-p btn-sm" id="upload-single-btn" onclick="document.getElementById('single-file-input').click()">📤 上传文件</button>
           <button class="btn btn-g btn-sm" onclick="closeDetail()" style="margin-left:6px">关闭</button>
         </div>
         <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;padding:8px 12px;font-size:.71rem;font-weight:600;color:var(--ink-muted);border-bottom:1px solid var(--border)">
@@ -550,10 +556,30 @@ function renderFileList(files, cid) {
       <span class="tag ${STATUS_CLS[f.status]||'tg-unknown'}">${STATUS_LABEL[f.status]||f.status}</span>
       <div class="frow-actions">
         <button class="btn btn-g btn-sm" id="save-dt-${fileId}" style="display:none" onclick="saveDtType('${fileId}','${cid}')">💾 保存</button>
+        <button class="btn btn-g btn-sm" id="reclassify-${fileId}" onclick="reclassifyFile('${fileId}','${cid}')">🏷 重分类</button>
+        <button class="btn btn-g btn-sm btn-toggle" id="toggle-preview-${fileId}" onclick="togglePreview('${fileId}')">📖 原文</button>
         <button class="btn btn-warn btn-sm" id="repr-${fileId}" onclick="reprocessFile('${fileId}','${f.filename}')">🔄 重处理</button>
+      </div>
+      <div class="fpreview" id="preview-${fileId}" hidden>
+        <div class="fpreview-label">解析原文预览</div>
+        ${f.preview_text ? esc(f.preview_text) : '<div class="fpreview-empty">暂无原文预览</div>'}
       </div>
     </div>`;
   }).join('');
+}
+
+function togglePreview(fileId) {
+  const panel = document.getElementById(`preview-${fileId}`);
+  const btn = document.getElementById(`toggle-preview-${fileId}`);
+  if (!panel || !btn) return;
+  const willOpen = panel.hasAttribute('hidden');
+  if (willOpen) {
+    panel.removeAttribute('hidden');
+    btn.textContent = '📕 收起';
+  } else {
+    panel.setAttribute('hidden', '');
+    btn.textContent = '📖 原文';
+  }
 }
 
 function onDtChange(fileId, sel) {
@@ -598,8 +624,34 @@ async function reprocessFile(fileId, filename) {
   finally { btn.innerHTML='🔄 重处理'; btn.disabled=false; }
 }
 
+async function reclassifyFile(fileId, cid) {
+  const btn = document.getElementById(`reclassify-${fileId}`);
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">🏷</span>';
+  try {
+    const r = await fetch(`/api/files/${fileId}/reclassify`, {method:'POST'});
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '重分类失败');
+    if (data.status === 'skipped') {
+      toast(data.reason || '已跳过', 'warning');
+      return;
+    }
+    toast(`已重分类为：${TYPE_LABEL[data.doc_type_new] || data.doc_type_new}`,'success');
+    await selectCompany(cid);
+    await loadCompaniesData();
+    loadCompanies();
+  } catch(e) {
+    toast(e.message,'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '🏷 重分类';
+  }
+}
+
 function closeDetail() {
   document.getElementById('company-detail').style.display = 'none';
+  document.getElementById('single-file-input').value = '';
   selectedCid = null; loadCompanies();
 }
 
@@ -613,6 +665,53 @@ async function deleteCompany(cid, name) {
     document.getElementById('company-detail').style.display = 'none';
     await loadCompaniesData(); loadCompanies();
   } catch(e) { toast(e.message,'error'); }
+}
+
+async function handleSingleFileUpload(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!selectedCid) {
+    toast('请先选择企业', 'warning');
+    input.value = '';
+    return;
+  }
+
+  const company = companies.find(c => c.company_id === selectedCid);
+  const companyName = company?.name || document.getElementById('detail-name').textContent.trim() || selectedCid;
+  const btn = document.getElementById('upload-single-btn');
+  const oldText = btn.innerHTML;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">📤</span> 上传中…';
+
+  const fd = new FormData();
+  fd.append('company_id', selectedCid);
+  fd.append('company_name', companyName);
+  fd.append('files', file);
+  fd.append('relative_paths', file.name);
+
+  try {
+    const r = await fetch('/api/upload/folder', {method:'POST', body: fd});
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || '上传失败');
+
+    const saved = Number(data.saved || 0);
+    const skipped = Number(data.skipped || 0);
+    if (saved > 0) {
+      toast(`${file.name} 已上传，接下来点击“开始入库”即可处理`, 'success');
+    } else {
+      toast(`${file.name} 未上传成功${skipped ? '，已被跳过' : ''}`, 'warning');
+    }
+
+    await loadCompaniesData();
+    await selectCompany(selectedCid);
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldText;
+    input.value = '';
+  }
 }
 
 // ── 文件夹选择 ────────────────────────────────────────────────────────────

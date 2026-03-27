@@ -175,7 +175,9 @@ class IngestTask:
         if auto_classify and docs and _should_auto_classify(path, docs):
             decision = classify_doc_type(docs, file_path=path)
             inferred = docs[0].metadata.get("inferred_doc_type")
-            candidate = inferred if inferred in DocType.ALL else decision.doc_type
+            candidate = decision.doc_type
+            if inferred in DocType.ALL and inferred != DocType.UNKNOWN:
+                candidate = inferred
             if candidate in DocType.ALL and candidate != doc_type:
                 logger.info(
                     "[Task] 内容分类更新文档类型: %s %s → %s (confidence=%.2f evidence=%s)",

@@ -12,6 +12,7 @@ GET    /api/files                          已入库文件列表
 DELETE /api/files/{file_id}                删除文件
 PATCH  /api/files/{file_id}/doc_type       人工修改文件类型
 POST   /api/files/{file_id}/reprocess      重新处理文件
+POST   /api/files/{file_id}/reclassify     按已入库内容重新分类
 
 POST   /api/companies                      创建企业
 GET    /api/companies                      企业列表
@@ -30,8 +31,10 @@ from pydantic import BaseModel
 
 from config.settings import settings
 from core.dedup import Dedup, DocType
+from core.doc_type_classifier import classify_doc_type
 from core.embedder import Embedder
 from core.tasks import IngestTask
+from models.document import Document
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ingest"])
@@ -420,6 +423,50 @@ async def reprocess_file(
         }, status_code=202)
 
 
+@router.post("/files/{file_id}/reclassify")
+async def reclassify_file(file_id: str):
+    record = Dedup.get_file(file_id)
+    if not record:
+        all_files = Dedup.list_files()
+        matched = [f for f in all_files if f["id"].startswith(file_id)]
+        if len(matched) == 1:
+            record = matched[0]
+            file_id = record["id"]
+        elif len(matched) > 1:
+            raise HTTPException(status_code=400, detail="file_id 前缀匹配到多个文件")
+        else:
+            raise HTTPException(status_code=404, detail="文件不存在")
+
+    if bool(record.get("doc_type_confirmed", 0)):
+        return JSONResponse({
+            "status": "skipped",
+            "file_id": file_id,
+            "filename": record["filename"],
+            "doc_type": record["doc_type"],
+            "reason": "文件类型已人工确认，未自动覆盖",
+        })
+
+    docs = _load_docs_for_reclassify(record)
+    if not docs:
+        raise HTTPException(status_code=400, detail="无可用于重分类的解析内容，请先重新处理文件")
+
+    decision = classify_doc_type(docs, file_path=record["file_path"])
+    old_type = record["doc_type"]
+    new_type = decision.doc_type if decision.doc_type in DocType.ALL else DocType.UNKNOWN
+    Dedup.update_doc_type(file_id, new_type, confirmed=False)
+
+    return JSONResponse({
+        "status": "updated",
+        "file_id": file_id,
+        "filename": record["filename"],
+        "doc_type_old": old_type,
+        "doc_type_new": new_type,
+        "doc_type_confirmed": False,
+        "confidence": decision.confidence,
+        "evidence": decision.evidence,
+    })
+
+
 # ---------------------------------------------------------------------------
 # 企业管理
 # ---------------------------------------------------------------------------
@@ -469,6 +516,7 @@ async def get_company(company_id: str):
             "doc_type":           f["doc_type"],
             "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
             "status":             f["status"],
+            "preview_text":       _build_file_preview(f["id"], f["status"]),
         } for f in files],
     })
 
@@ -525,4 +573,60 @@ def _prepare_doc(file_path: Path) -> Path | None:
             return None
         return file_path
     return file_path
+
+
+def _build_file_preview(file_id: str, status: str, max_chars: int = 1200) -> str:
+    if status != "done":
+        return ""
+
+    try:
+        chunks = Embedder.query_chunks_by_file(file_id=file_id, limit=12)
+    except Exception as exc:
+        logger.warning("[Companies] 读取文件预览失败: file_id=%s err=%s", file_id[:12], exc)
+        return ""
+
+    if not chunks:
+        return ""
+
+    chunks = sorted(chunks, key=lambda item: (item.get("chunk_index") is None, item.get("chunk_index", 0)))
+    merged: list[str] = []
+    total = 0
+
+    for chunk in chunks:
+        text = str(chunk.get("raw_content") or chunk.get("content") or "").strip()
+        if not text:
+            continue
+        if total >= max_chars:
+            break
+        remaining = max_chars - total
+        if len(text) > remaining:
+            text = text[:remaining].rstrip() + "..."
+        merged.append(text)
+        total += len(text)
+
+    return "\n\n".join(merged).strip()
+
+
+def _load_docs_for_reclassify(record: dict, limit: int = 24) -> list[Document]:
+    try:
+        chunks = Embedder.query_chunks_by_file(file_id=record["id"], limit=limit)
+    except Exception as exc:
+        logger.warning("[Reclassify] 读取 chunk 失败: file_id=%s err=%s", record["id"][:12], exc)
+        return []
+
+    docs: list[Document] = []
+    ordered = sorted(chunks, key=lambda item: (item.get("chunk_index") is None, item.get("chunk_index", 0)))
+    for idx, chunk in enumerate(ordered):
+        text = str(chunk.get("raw_content") or chunk.get("content") or "").strip()
+        if not text:
+            continue
+        docs.append(Document(
+            page_content=text,
+            metadata={
+                "source": chunk.get("source") or record.get("file_path") or "",
+                "label": chunk.get("label") or "text",
+                "chunk_index": chunk.get("chunk_index", idx),
+            },
+        ))
+    return docs
     

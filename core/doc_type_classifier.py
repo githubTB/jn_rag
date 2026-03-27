@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from core.dedup import DocType
 from models.document import Document
@@ -22,6 +23,9 @@ _KEYWORDS: dict[str, tuple[str, ...]] = {
         "注册资本",
         "成立日期",
         "公司类型",
+        "信用中国",
+        "行政许可",
+        "登记状态",
     ),
     DocType.INVOICE: (
         "发票",
@@ -85,9 +89,21 @@ def classify_doc_type(
         scores[DocType.TABLE] += 0.35
         evidence[DocType.TABLE].append(f"table_blocks:{table_blocks}")
 
+    if any(tag in all_text for tag in ("<table", "<tr", "<td", "<th", "</table>")):
+        scores[DocType.TABLE] += 0.8
+        evidence[DocType.TABLE].append("structure:html_table")
+
+    if re.search(r"^\s*\|.+\|\s*$", all_text, flags=re.MULTILINE):
+        scores[DocType.TABLE] += 0.45
+        evidence[DocType.TABLE].append("structure:markdown_table")
+
     if ocr_blocks == len(docs) and docs:
         scores[DocType.NAMEPLATE] += 0.1
         evidence[DocType.NAMEPLATE].append("ocr_only_blocks")
+
+    if all_text.strip():
+        scores[DocType.DOCUMENT] += 0.35
+        evidence[DocType.DOCUMENT].append("non_empty_content")
 
     if seal_blocks > 0 and title_blocks > 0:
         scores[DocType.LICENSE] += 0.25
@@ -124,10 +140,7 @@ def classify_doc_type(
     confidence = max(0.0, min(scores[winner], 0.99))
 
     if confidence < 0.45:
-        fallback = DocType.UNKNOWN if suffix in {
-            ".pdf", ".docx", ".docm", ".pptx",
-            ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif",
-        } else DocType.DOCUMENT
+        fallback = DocType.DOCUMENT if all_text.strip() else DocType.UNKNOWN
         return DocTypeDecision(fallback, confidence, evidence.get(winner) or ["low_confidence"])
 
     return DocTypeDecision(winner, confidence, evidence[winner] or ["content_match"])
