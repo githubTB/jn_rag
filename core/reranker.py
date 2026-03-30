@@ -19,7 +19,6 @@ core/reranker.py — 检索结果重排序（Cross-encoder Reranker）。
 from __future__ import annotations
 
 import logging
-import os
 import urllib.request
 import json
 from typing import Any
@@ -43,8 +42,8 @@ def _get_reranker():
     if _reranker is not None:
         return _reranker
 
-    model_name = os.environ.get("RERANKER_MODEL", "BAAI/bge-reranker-v2-m3")
-    device     = os.environ.get("RERANKER_DEVICE", "cpu")
+    model_name = settings.reranker_model
+    device     = settings.reranker_device
     use_fp16   = "cuda" in device
 
     try:

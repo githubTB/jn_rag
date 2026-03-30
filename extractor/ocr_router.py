@@ -5,7 +5,11 @@ extractor/ocr_router.py — 图片 OCR 路由。
 
 .env 配置：
     VL_BACKEND=vllm-server
-    VL_SERVER_URL=http://<服务器IP>:8118/v1
+    VL_BASE_URL=http://<服务器IP>:8118/v1
+    VL_MODEL=paddleocr-vl:latest
+    VL_MAX_FILE_MB=50.0
+    VL_MAX_PX=1600
+    VL_TIMEOUT=120
 """
 
 from __future__ import annotations

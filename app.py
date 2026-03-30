@@ -116,8 +116,8 @@ async def health():
         "llm_model":     settings.llm_model,
         "llm_api_base":  settings.llm_api_base,
         "vl_backend":    settings.vl_backend or "local_cpu",
-        "got_ocr":       settings.got_ocr_model or "",
-        "got_ocr_ready": settings.got_ocr_available,
+        "vl_base_url": settings.vl_base_url or "",
+        "vl_model":  settings.vl_model or "",
         "stats":         stats,
         "vector_count":  vector_count,
     }

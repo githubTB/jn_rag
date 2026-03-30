@@ -132,8 +132,14 @@ class PdfExtractor(BaseExtractor):
         vl_kwargs = {}
         if settings.vl_backend:
             vl_kwargs["vl_rec_backend"] = settings.vl_backend
-        if settings.vl_server_url:
-            vl_kwargs["vl_rec_server_url"] = settings.vl_server_url
+        if settings.vl_base_url:
+            vl_kwargs["vl_rec_server_url"] = settings.vl_base_url
+        if settings.vl_model:
+            vl_kwargs["vl_model"] = settings.vl_model
+        if settings.vl_device:
+            vl_kwargs["device"] = settings.vl_device
+        if settings.vl_timeout:
+            vl_kwargs["timeout"] = settings.vl_timeout
 
         try:
             page_docs = route_ocr(img_path, doc_type=self._doc_type, **vl_kwargs)

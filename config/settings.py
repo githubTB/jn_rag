@@ -28,8 +28,8 @@ settings.py — 项目全局配置。
 
     # OCR
     VL_BACKEND=vllm-server
-    VL_SERVER_URL=http://117.x.x.x:8118/v1
-    VL_OCR_MODEL=paddleocr-vl:latest
+    VL_BASE_URL=http://117.x.x.x:8118/v1
+    VL_MODEL=paddleocr-vl:latest
     VL_DEVICE=
 """
 
@@ -48,13 +48,12 @@ class Settings(BaseSettings):
         extra="ignore",         # 忽略 .env 里多余的 key，不报错
     )
 
-    # ── GOT-OCR2 ─────────────────────────────────────────────────────
-    got_ocr_model: str = Field("", description="GOT-OCR2 本地路径，空=未部署自动降级")
+    # ── 日志 ──────────────────────────────────────────────────────────────
+    log_level: str = Field("INFO", description="日志级别: DEBUG/INFO/WARNING/ERROR")
 
     # ── 文件存储 ──────────────────────────────────────────────────────
     upload_dir: str = Field("uploaded_files", description="上传文件目录")
     db_path: str = Field("data/rag_meta.db", description="SQLite 元数据库路径")
-    log_level: str = Field("INFO", description="日志级别: DEBUG/INFO/WARNING/ERROR")
 
     # ── Redis ──────────────────────────────────────────────────────────
     redis_host:     str = Field("localhost", description="Redis 主机")
@@ -92,19 +91,14 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(0.3, ge=0.0, le=2.0)
     llm_max_tokens: int = Field(2048, ge=1)
 
-    # ── OCR（glm-OCR）─────────────────────────────────────────────────
+    # ── OCR / VL ─────────────────────────────────────────────────────
     vl_backend: str | None = Field(None, description="none=本地cpu / vllm-server 等")
-    vl_server_url: str | None = Field(None, description="vLLM 服务地址")
-    vl_ocr_model: str | None = Field("glm-ocr:latest", description="OCR 模型，None=本地cpu")
+    vl_base_url: str | None = Field(None, description="vLLM 服务地址")
+    vl_model: str | None = Field("glm-ocr:latest", description="OCR 模型，None=本地cpu")
     vl_device: str | None = Field(None, description="OCR 推理设备，None=自动")
     vl_max_file_mb: float = Field(50.0, description="OCR 图片大小上限 MB")
-
-    @property
-    def got_ocr_available(self) -> bool:
-        if not self.got_ocr_model:
-            return False
-        from pathlib import Path
-        return Path(self.got_ocr_model).exists()
+    vl_max_px: int = Field(1600, description="OCR 图片最大像素")
+    vl_timeout: int = Field(120, description="OCR 推理超时时间")
 
     @property
     def redis_broker_url(self) -> str:

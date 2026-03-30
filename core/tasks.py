@@ -159,7 +159,10 @@ class IngestTask:
 
         ocr_defaults = {
             "vl_rec_backend":    settings.vl_backend,
-            "vl_rec_server_url": settings.vl_server_url,
+            "vl_rec_server_url": settings.vl_base_url,
+            "vl_model":          settings.vl_model,
+            "max_pixels":        settings.vl_max_px,
+            "timeout":           settings.vl_timeout,
             "device":            settings.vl_device,
             "max_file_mb":       settings.vl_max_file_mb,
             "doc_type":          doc_type,

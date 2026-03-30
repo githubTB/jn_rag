@@ -1,14 +1,17 @@
 """
 extractor/image_extractor.py — 图片文字提取器。
 
-支持两种后端，通过 .env 切换：
+支持 OCR 后端，通过 .env 切换：
   1. 远程 Ollama GLM-OCR（ollama 服务）
 
 .env 配置：
-    # 远程 Ollama GLM-OCR
+    # 远程 Ollama GLM-OCR（兼容旧字段 VL_BASE_URL / VL_MODEL）
     VL_BACKEND=ollama
-    OLLAMA_BASE_URL=http://localhost:11434
-    OLLAMA_OCR_MODEL=glm-ocr:latest
+    VL_BASE_URL=http://localhost:11434
+    VL_MODEL=glm-ocr:latest
+    VL_MAX_FILE_MB=50.0
+    VL_MAX_PX=1600
+    VL_TIMEOUT=120
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from core.doc_type_classifier import classify_doc_type
+from config.settings import settings
 from .base import BaseExtractor
 from models.document import Document
 
@@ -39,14 +43,6 @@ _MIME_MAP: dict[str, str] = {
     ".tiff": "image/tiff",
     ".tif":  "image/tiff",
 }
-
-def _env(key: str, default: str | None = None) -> str | None:
-    try:
-        from dotenv import load_dotenv
-        load_dotenv()
-    except ImportError:
-        pass
-    return os.environ.get(key, default)
 
 
 # PaddleOCRVL 单例
@@ -105,15 +101,13 @@ class ImageExtractor(BaseExtractor):
         self._doc_type = doc_type
         self._output_format = output_format
         self._vl_rec_max_concurrency = vl_rec_max_concurrency
+        self._max_pixels = max_pixels
+        self._vl_rec_device = device or settings.vl_device
+        self._vl_timeout = settings.vl_timeout
 
-        # 始终从 .env 读取，外部参数只作为兜底
-        # 不管从哪里创建（直接/PdfExtractor内部/route_ocr），都能正确读到配置
-        self._vl_rec_backend    = _env("VL_BACKEND")    or vl_rec_backend
-        self._vl_rec_server_url = _env("VL_SERVER_URL") or vl_rec_server_url
-
-        # Ollama 配置
-        self._ollama_base_url  = _env("OLLAMA_BASE_URL",  "http://localhost:11434")
-        self._ollama_ocr_model = _env("OLLAMA_OCR_MODEL", "glm-ocr:latest")
+        # 统一通过 settings 读取配置，构造参数只作为显式覆盖。
+        self._vl_rec_backend    = vl_rec_backend or settings.vl_backend
+        self._vl_rec_server_url = vl_rec_server_url or settings.vl_base_url
 
         logger.debug("[OCR] backend=%s", self._vl_rec_backend)
 
@@ -182,7 +176,7 @@ class ImageExtractor(BaseExtractor):
             img_b64 = base64.b64encode(f.read()).decode()
 
         payload = {
-            "model": self._ollama_ocr_model,
+            "model": self.vl_model,
             "messages": [
                 {
                     "role": "user",
@@ -193,8 +187,8 @@ class ImageExtractor(BaseExtractor):
             "stream": False,
         }
 
-        url = f"{self._ollama_base_url.rstrip('/')}/api/chat"
-        logger.info("[Ollama] 请求: %s  model=%s", url, self._ollama_ocr_model)
+        url = f"{self._vl_rec_server_url.rstrip('/')}/api/chat"
+        logger.info("[Ollama] 请求: %s  model=%s", url, self._vl_rec_model)
 
         req = urllib.request.Request(
             url,
@@ -203,7 +197,7 @@ class ImageExtractor(BaseExtractor):
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=self.vl_timeout) as resp:
                 data = json.loads(resp.read())
             text = data.get("message", {}).get("content", "").strip()
             logger.info("[Ollama] 识别完成: %d 字符", len(text))

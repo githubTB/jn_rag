@@ -50,15 +50,6 @@ class DocType:
 
     ALL = {LICENSE, INVOICE, TABLE, NAMEPLATE, DOCUMENT, UNKNOWN}
 
-    OCR_ENGINE: dict[str, str] = {
-        LICENSE:   "ppocr",
-        INVOICE:   "ppocr",
-        TABLE:     "ppocr",
-        NAMEPLATE: "got_ocr",
-        DOCUMENT:  "ppocr",
-        UNKNOWN:   "got_ocr",
-    }
-
 
 _initialized: bool = False
 
