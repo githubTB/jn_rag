@@ -13,6 +13,7 @@ import json
 import logging
 from math import log
 import re
+import time
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -30,6 +31,33 @@ from core.reranker import Reranker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["search"])
+
+
+def _llm_usage_payload(
+    *,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    duration_ms: int | None = None,
+) -> dict:
+    total_tokens = None
+    if prompt_tokens is not None or completion_tokens is not None:
+        total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "duration_ms": duration_ms,
+    }
+
+
+def _extract_usage(resp) -> tuple[int | None, int | None]:
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return None, None
+    return (
+        getattr(usage, "prompt_tokens", None),
+        getattr(usage, "completion_tokens", None),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +382,7 @@ async def query(
             "sources":    [],
             "chunks":     [],
             "reranker":   False,
+            "llm_usage":  _llm_usage_payload(),
         })
 
     # ── STEP 3: 拼装 context ─────────────────────────────────────────
@@ -368,7 +397,7 @@ async def query(
             company_name = company["name"]
 
     # ── STEP 5: 调 LLM ───────────────────────────────────────────────
-    answer = await _call_llm(q, context, company_name=company_name)
+    answer, llm_usage = await _call_llm(q, context, company_name=company_name)
 
     # ── 来源汇总（去重，按文件归组）──────────────────────────────────
     seen: set[str] = set()
@@ -396,6 +425,7 @@ async def query(
         "sources":    sources,
         "chunks":     hits,
         "reranker":   reranker_used,
+        "llm_usage":  llm_usage,
     })
 
 
@@ -486,11 +516,12 @@ async def query_extract(body: QueryExtractRequest):
             "chunks": [],
             "reranker": False,
             "message": "未找到相关内容，请确认文件已入库或放宽过滤条件。",
+            "llm_usage": _llm_usage_payload(),
         })
 
     context = _build_context(hits)
 
-    raw_output, structured_data = await _call_llm_extract(
+    raw_output, structured_data, llm_usage = await _call_llm_extract(
         text=context,
         company_name=company_name,
         system_prompt=request_system_prompt,
@@ -521,6 +552,7 @@ async def query_extract(body: QueryExtractRequest):
         "structured_data": structured_data,
         "sources": sources,
         "reranker": reranker_used,
+        "llm_usage": llm_usage,
     }
     if body.include_chunks:
         response["chunks"] = hits
@@ -603,7 +635,7 @@ async def _call_llm(
     question: str,
     context: str,
     company_name: str | None = None,
-) -> str:
+) -> tuple[str, dict]:
     """调用 Qwen 生成答案，LLM 不可用时降级返回原始检索内容。"""
     try:
         from openai import AsyncOpenAI
@@ -631,6 +663,7 @@ async def _call_llm(
     logger.debug("[LLM] model=%s company=%s", settings.llm_model, company_name)
 
     try:
+        started_at = time.perf_counter()
         resp = await client.chat.completions.create(
             model=settings.llm_model,
             messages=[
@@ -641,13 +674,22 @@ async def _call_llm(
             max_tokens=settings.llm_max_tokens,
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
         answer = resp.choices[0].message.content or ""
+        prompt_tokens, completion_tokens = _extract_usage(resp)
         logger.debug("[LLM] 完成，tokens=%s", resp.usage)
-        return answer.strip()
+        return answer.strip(), _llm_usage_payload(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            duration_ms=duration_ms,
+        )
 
     except Exception as exc:
         logger.error("[LLM] 调用失败: %s", exc, exc_info=True)
-        return f"（LLM 暂不可用，以下为原始检索内容）\n\n{context[:1500]}"
+        return (
+            f"（LLM 暂不可用，以下为原始检索内容）\n\n{context[:1500]}",
+            _llm_usage_payload(),
+        )
 
 
 async def _call_llm_extract(
@@ -657,7 +699,7 @@ async def _call_llm_extract(
     system_prompt: str,
     user_prompt_template: str,
     max_tokens: int,
-) -> tuple[str, dict | list | None]:
+) -> tuple[str, dict | list | None, dict]:
     try:
         from openai import AsyncOpenAI
     except ImportError as exc:
@@ -671,6 +713,11 @@ async def _call_llm_extract(
         text=text,
         company_name=company_name or "",
     )
+
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    has_usage = False
+    started_at = time.perf_counter()
 
     try:
         resp = await client.chat.completions.create(
@@ -689,6 +736,11 @@ async def _call_llm_extract(
 
     raw = (resp.choices[0].message.content or "").strip()
     finish_reason = resp.choices[0].finish_reason
+    prompt_tokens, completion_tokens = _extract_usage(resp)
+    if prompt_tokens is not None or completion_tokens is not None:
+        total_prompt_tokens += prompt_tokens or 0
+        total_completion_tokens += completion_tokens or 0
+        has_usage = True
     logger.debug("[LLMExtract] finish_reason=%s 原始输出: %s", finish_reason, raw[:500])
 
     parsed = _safe_parse_json(raw)
@@ -713,6 +765,11 @@ async def _call_llm_extract(
             )
             retry_raw = (retry_resp.choices[0].message.content or "").strip()
             retry_finish_reason = retry_resp.choices[0].finish_reason
+            retry_prompt_tokens, retry_completion_tokens = _extract_usage(retry_resp)
+            if retry_prompt_tokens is not None or retry_completion_tokens is not None:
+                total_prompt_tokens += retry_prompt_tokens or 0
+                total_completion_tokens += retry_completion_tokens or 0
+                has_usage = True
             logger.debug(
                 "[LLMExtract] retry finish_reason=%s 原始输出: %s",
                 retry_finish_reason,
@@ -720,11 +777,21 @@ async def _call_llm_extract(
             )
             retry_parsed = _safe_parse_json(retry_raw)
             if retry_parsed is not None:
-                return retry_raw, retry_parsed
+                duration_ms = int((time.perf_counter() - started_at) * 1000)
+                return retry_raw, retry_parsed, _llm_usage_payload(
+                    prompt_tokens=total_prompt_tokens if has_usage else None,
+                    completion_tokens=total_completion_tokens if has_usage else None,
+                    duration_ms=duration_ms,
+                )
         except Exception as exc:
             logger.warning("[LLMExtract] 重试失败: %s", exc)
 
-    return raw, parsed
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    return raw, parsed, _llm_usage_payload(
+        prompt_tokens=total_prompt_tokens if has_usage else None,
+        completion_tokens=total_completion_tokens if has_usage else None,
+        duration_ms=duration_ms,
+    )
 
 
 def _safe_parse_json(text: str) -> dict | list | None:
