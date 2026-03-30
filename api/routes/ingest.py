@@ -5,7 +5,7 @@ api/routes/ingest.py — 完整版，含所有接口。
 --------
 POST   /api/upload/folder                  文件夹批量上传（保持目录结构，不触发入库）
 POST   /api/ingest                         单文件上传入库
-POST   /api/ingest/scan/{company_id}       扫描目录批量入库（Celery 异步队列）
+POST   /api/ingest/scan/{task_id}          扫描目录批量入库（Celery 异步队列）
 GET    /api/ingest/status/{file_id}        查询入库状态
 GET    /api/task/{task_id}                 查询 Celery 任务状态
 GET    /api/files                          已入库文件列表
@@ -19,8 +19,8 @@ POST   /api/files/{file_id}/reclassify     按已入库内容重新分类
 
 POST   /api/companies                      创建企业
 GET    /api/companies                      企业列表
-GET    /api/companies/{company_id}         企业详情
-DELETE /api/companies/{company_id}         删除企业
+GET    /api/companies/{task_id}            企业详情
+DELETE /api/companies/{task_id}            删除企业
 """
 
 from __future__ import annotations
@@ -60,21 +60,24 @@ _MAX_UPLOAD_MB = 50
 async def upload_folder(
     files: list[UploadFile] = File(...),
     relative_paths: list[str] = Form(...),
-    company_id: str = Form(...),
+    task_id: str = Form(...),
     company_name: str = Form(...),
     company_credit_code: str | None = Form(None),
 ):
     """
     上传整个文件夹，保持目录结构，只保存不入库。
-    入库请调用 POST /api/ingest/scan/{company_id}
+    入库请调用 POST /api/ingest/scan/{task_id}
     """
+    final_task_id = task_id.strip()
+    final_company_name = company_name.strip()
+
     if len(files) != len(relative_paths):
         raise HTTPException(status_code=400, detail="files 和 relative_paths 数量不一致")
 
-    Dedup.register_company(company_id, company_name, company_credit_code)
-    logger.info("[Upload] 企业: %s (%s)  文件数: %d", company_name, company_id, len(files))
+    Dedup.register_company(final_task_id, final_company_name, company_credit_code)
+    logger.info("[Upload] 企业: %s (%s)  文件数: %d", final_company_name, final_task_id, len(files))
 
-    base_dir = Path(settings.upload_dir) / company_id
+    base_dir = Path(settings.upload_dir) / final_task_id
     saved, skipped_list = [], []
 
     for file, rel_path in zip(files, relative_paths):
@@ -102,8 +105,8 @@ async def upload_folder(
 
     return JSONResponse({
         "status":        "uploaded",
-        "company_id":    company_id,
-        "company_name":  company_name,
+        "task_id":       final_task_id,
+        "company_name":  final_company_name,
         "company_credit_code": (company_credit_code or "").strip() or None,
         "saved":         len(saved),
         "skipped":       len(skipped_list),
@@ -121,13 +124,13 @@ async def upload_folder(
 async def ingest(
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    company_id: str | None = None,
+    task_id: str | None = None,
     doc_type: str | None = None,
     sync: bool = False,
 ):
-    if company_id and not Dedup.get_company(company_id):
+    if task_id and not Dedup.get_company(task_id):
         raise HTTPException(status_code=404,
-            detail=f"企业不存在: {company_id}，请先通过 POST /api/companies 创建")
+            detail=f"企业不存在: {task_id}，请先通过 POST /api/companies 创建")
 
     doc_type_confirmed = doc_type is not None
     if doc_type is None:
@@ -142,8 +145,8 @@ async def ingest(
         raise HTTPException(status_code=415, detail=f"不支持的文件格式: {ext}")
 
     upload_dir = Path(settings.upload_dir)
-    if company_id:
-        upload_dir = upload_dir / company_id
+    if task_id:
+        upload_dir = upload_dir / task_id
     upload_dir.mkdir(parents=True, exist_ok=True)
     save_path = upload_dir / filename
     counter = 1
@@ -165,7 +168,7 @@ async def ingest(
                              "file_id": file_id, "file": existing.get("filename", filename)})
 
     kwargs = dict(
-        company_id=company_id,
+        task_id=task_id,
         doc_type=doc_type,
         doc_type_confirmed=doc_type_confirmed,
     )
@@ -180,19 +183,19 @@ async def ingest(
 
 
 # ---------------------------------------------------------------------------
-# POST /api/ingest/scan/{company_id} — 扫描目录，Celery 异步队列
+# POST /api/ingest/scan/{task_id} — 扫描目录，Celery 异步队列
 # ---------------------------------------------------------------------------
 
-@router.post("/ingest/scan/{company_id}")
+@router.post("/ingest/scan/{task_id}")
 async def scan_company_dir(
-    company_id: str,
+    task_id: str,
     doc_type: str | None = None,
     sync: bool = False,
 ):
-    if not Dedup.get_company(company_id):
-        raise HTTPException(status_code=404, detail=f"企业不存在: {company_id}")
+    if not Dedup.get_company(task_id):
+        raise HTTPException(status_code=404, detail=f"企业不存在: {task_id}")
 
-    scan_dir = Path(settings.upload_dir) / company_id
+    scan_dir = Path(settings.upload_dir) / task_id
     if not scan_dir.exists():
         raise HTTPException(status_code=404, detail=f"目录不存在: {scan_dir}")
 
@@ -219,7 +222,7 @@ async def scan_company_dir(
         message = "目录下没有找到需要入库的新文件" if skipped_existing else "目录下没有找到支持的文件"
         return JSONResponse({
             "status": "empty",
-            "company_id": company_id,
+            "task_id": task_id,
             "message": message,
             "skipped_existing": len(skipped_existing),
         })
@@ -234,16 +237,16 @@ async def scan_company_dir(
     from core.tasks_celery import ingest_batch
 
     if sync:
-        result = ingest_batch.apply(args=[tasks, company_id]).get(timeout=3600)
+        result = ingest_batch.apply(args=[tasks, task_id]).get(timeout=3600)
         return JSONResponse(result)
     else:
-        job = ingest_batch.apply_async(args=[tasks, company_id], queue="ingest")
-        logger.info("[Scan] 推入队列: company=%s  files=%d  task_id=%s",
-                    company_id, len(tasks), job.id)
+        job = ingest_batch.apply_async(args=[tasks, task_id], queue="ingest")
+        logger.info("[Scan] 推入队列: task=%s  files=%d  job_id=%s",
+                    task_id, len(tasks), job.id)
         return JSONResponse({
             "status":     "queued",
-            "task_id":    job.id,
-            "company_id": company_id,
+            "job_id":     job.id,
+            "task_id":    task_id,
             "total":      len(tasks),
             "skipped_existing": len(skipped_existing),
             "files":      [{"file": Path(t["path"]).name, "doc_type": t["doc_type"]} for t in tasks],
@@ -263,7 +266,7 @@ async def ingest_status(file_id: str):
     resp = {
         "file_id":            record["id"],
         "filename":           record["filename"],
-        "company_id":         record["company_id"],
+        "task_id":            record["task_id"],
         "doc_type":           record["doc_type"],
         "doc_type_confirmed": bool(record.get("doc_type_confirmed", 0)),
         "status":             record["status"],
@@ -302,16 +305,16 @@ async def get_task_status(task_id: str):
 @router.get("/files")
 async def list_files(
     status: str | None = None,
-    company_id: str | None = None,
+    task_id: str | None = None,
     doc_type: str | None = None,
 ):
-    files = Dedup.list_files(status=status, company_id=company_id, doc_type=doc_type)
+    files = Dedup.list_files(status=status, task_id=task_id, doc_type=doc_type)
     return JSONResponse({
         "total": len(files),
         "files": [{
             "file_id":            f["id"][:16] + "..",
             "filename":           f["filename"],
-            "company_id":         f["company_id"],
+            "task_id":            f["task_id"],
             "doc_type":           f["doc_type"],
             "doc_type_confirmed": bool(f.get("doc_type_confirmed", 0)),
             "status":             f["status"],
@@ -481,7 +484,7 @@ async def replace_file(
     Dedup.delete_file(file_id)
 
     kwargs = dict(
-        company_id=record["company_id"],
+        task_id=record["task_id"],
         doc_type=record["doc_type"],
         doc_type_confirmed=bool(record.get("doc_type_confirmed", 0)),
         force=True,
@@ -543,7 +546,7 @@ async def reprocess_file(
         conn.execute("UPDATE files SET status = 'pending' WHERE id = ?", (file_id,))
 
     kwargs = dict(
-        company_id=record["company_id"],
+        task_id=record["task_id"],
         doc_type=record["doc_type"],
         doc_type_confirmed=bool(record.get("doc_type_confirmed", 0)),
         force=True,
@@ -615,16 +618,20 @@ async def reclassify_file(file_id: str):
 # ---------------------------------------------------------------------------
 
 class CompanyCreate(BaseModel):
-    company_id: str
-    name: str
+    task_id: str
+    company_name: str
     credit_code: str | None = None
 
 
 @router.post("/companies", status_code=201)
 async def create_company(body: CompanyCreate):
-    Dedup.register_company(body.company_id, body.name, body.credit_code)
-    return JSONResponse({"status": "ok", "company_id": body.company_id,
-                         "name": body.name, "credit_code": body.credit_code}, status_code=201)
+    Dedup.register_company(body.task_id, body.company_name, body.credit_code)
+    return JSONResponse({
+        "status": "ok",
+        "task_id": body.task_id,
+        "company_name": body.company_name,
+        "credit_code": body.credit_code,
+    }, status_code=201)
 
 
 @router.get("/companies")
@@ -632,10 +639,10 @@ async def list_companies():
     companies = Dedup.list_companies()
     result = []
     for c in companies:
-        files = Dedup.list_files(company_id=c["id"])
+        files = Dedup.list_files(task_id=c["task_id"])
         result.append({
-            "company_id":      c["id"],
-            "name":            c["name"],
+            "task_id":         c["task_id"],
+            "company_name":    c["company_name"],
             "credit_code":     c.get("credit_code"),
             "created_at":      c["created_at"],
             "file_count":      len(files),
@@ -645,15 +652,15 @@ async def list_companies():
     return JSONResponse({"total": len(result), "companies": result})
 
 
-@router.get("/companies/{company_id}")
-async def get_company(company_id: str):
-    company = Dedup.get_company(company_id)
+@router.get("/companies/{task_id}")
+async def get_company(task_id: str):
+    company = Dedup.get_company(task_id)
     if not company:
         raise HTTPException(status_code=404, detail="企业不存在")
-    files = Dedup.list_files(company_id=company_id)
+    files = Dedup.list_files(task_id=task_id)
     return JSONResponse({
-        "company_id": company["id"],
-        "name":       company["name"],
+        "task_id": company["task_id"],
+        "company_name": company["company_name"],
         "credit_code": company.get("credit_code"),
         "created_at": company["created_at"],
         "files": [{
@@ -668,20 +675,24 @@ async def get_company(company_id: str):
     })
 
 
-@router.delete("/companies/{company_id}")
-async def delete_company(company_id: str):
-    company = Dedup.get_company(company_id)
+@router.delete("/companies/{task_id}")
+async def delete_company(task_id: str):
+    company = Dedup.get_company(task_id)
     if not company:
         raise HTTPException(status_code=404, detail="企业不存在")
-    files = Dedup.list_files(company_id=company_id)
+    files = Dedup.list_files(task_id=task_id)
     for f in files:
         try:
             Embedder.delete_by_file(f["id"])
         except Exception as e:
             logger.warning("[Ingest] Milvus 删除失败: %s", e)
-    deleted = Dedup.delete_company(company_id)
-    return JSONResponse({"status": "deleted", "company_id": company_id,
-                         "name": company["name"], "files_deleted": deleted})
+    deleted = Dedup.delete_company(task_id)
+    return JSONResponse({
+        "status": "deleted",
+        "task_id": task_id,
+        "company_name": company["company_name"],
+        "files_deleted": deleted,
+    })
 
 
 # ---------------------------------------------------------------------------

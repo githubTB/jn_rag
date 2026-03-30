@@ -29,8 +29,8 @@ app.conf.update(
     enable_utc=True,
 
     # 任务超时：单个文件最多 10 分钟
-    task_soft_time_limit=600,
-    task_time_limit=660,
+    task_soft_time_limit=3600,
+    task_time_limit=3900,
 
     # 结果保留 24 小时
     result_expires=86400,

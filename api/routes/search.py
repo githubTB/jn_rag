@@ -60,18 +60,24 @@ def _extract_usage(resp) -> tuple[int | None, int | None]:
     )
 
 
+def _public_hit(hit: dict) -> dict:
+    public = dict(hit)
+    public["task_id"] = public.get("task_id")
+    return public
+
+
 # ---------------------------------------------------------------------------
 # 构建 Milvus filter 表达式
 # ---------------------------------------------------------------------------
 
 def _build_filter(
-    company_id: str | None,
+    task_id: str | None,
     doc_type: str | None,
     file_id: str | None,
 ) -> str | None:
     parts = []
-    if company_id:
-        parts.append(f'company_id == "{company_id}"')
+    if task_id:
+        parts.append(f'task_id == "{task_id}"')
     if doc_type:
         parts.append(f'doc_type == "{doc_type}"')
     if file_id:
@@ -88,14 +94,14 @@ async def search(
     q: str = Query(..., min_length=1, description="查询文本"),
     top_k: int = Query(5, ge=1, le=20, description="返回条数"),
     score_threshold: float = Query(0.3, ge=0.0, le=1.0, description="最低相似度"),
-    company_id: str | None = Query(None, description="限定企业范围"),
+    task_id: str | None = Query(None, description="限定任务范围"),
     doc_type: str | None = Query(None, description="限定文件类型"),
     file_id: str | None = Query(None, description="限定单个文件"),
 ):
     """
     纯向量检索，不经过 Reranker 和 LLM，适合调试和前端展示相关段落。
     """
-    logger.info("[Search] q=%r company=%s type=%s", q, company_id, doc_type)
+    logger.info("[Search] q=%r task=%s type=%s", q, task_id, doc_type)
 
     if doc_type and doc_type not in DocType.ALL:
         raise HTTPException(
@@ -103,7 +109,7 @@ async def search(
             detail=f"无效的 doc_type: {doc_type}，可选: {', '.join(sorted(DocType.ALL))}",
         )
 
-    filter_expr = _build_filter(company_id, doc_type, file_id)
+    filter_expr = _build_filter(task_id, doc_type, file_id)
 
     try:
         hits = Embedder.search(
@@ -118,10 +124,10 @@ async def search(
 
     return JSONResponse({
         "query":      q,
-        "company_id": company_id,
+        "task_id":    task_id,
         "doc_type":   doc_type,
         "total":      len(hits),
-        "results":    hits,
+        "results":    [_public_hit(hit) for hit in hits],
     })
 
 
@@ -262,8 +268,8 @@ class QueryExtractRequest(BaseModel):
     q: str | None = Field(None, min_length=1, description="检索问题/抽取主题（不传则使用服务默认值）")
     top_k: int = Field(5, ge=1, le=20, description="最终保留条数")
     score_threshold: float = Field(0.3, ge=0.0, le=1.0, description="向量检索最低相似度")
-    company_id: str | None = Field(None, description="限定企业范围")
-    company_name: str | None = Field(None, description="企业名称（可用于 prompt 变量，不传则按 company_id 自动获取）")
+    task_id: str | None = Field(None, description="限定任务范围")
+    company_name: str | None = Field(None, description="企业名称（可用于 prompt 变量，不传则按 task_id 自动获取）")
     doc_type: str | None = Field(None, description="限定文件类型")
     file_id: str | None = Field(None, description="限定单个文件")
     prefer_source: str | None = Field(None, description="优先命中的源文件名关键词")
@@ -282,7 +288,7 @@ def _retrieve_hits(
     q: str,
     top_k: int,
     score_threshold: float,
-    company_id: str | None,
+    task_id: str | None,
     doc_type: str | None,
     file_id: str | None,
     prefer_source: str | None = None,
@@ -290,7 +296,7 @@ def _retrieve_hits(
     if doc_type and doc_type not in DocType.ALL:
         raise HTTPException(status_code=400, detail=f"无效的 doc_type: {doc_type}")
 
-    filter_expr = _build_filter(company_id, doc_type, file_id)
+    filter_expr = _build_filter(task_id, doc_type, file_id)
     recall_top_k = top_k * _RECALL_MULTIPLIER
     recall_threshold = min(score_threshold, _RECALL_THRESHOLD)
 
@@ -346,7 +352,7 @@ async def query(
     q: str = Query(..., min_length=1, description="问题"),
     top_k: int = Query(5, ge=1, le=20, description="最终返回条数（Reranker 精排后）"),
     score_threshold: float = Query(0.3, ge=0.0, le=1.0, description="向量检索最低相似度"),
-    company_id: str | None = Query(None, description="限定企业范围"),
+    task_id: str | None = Query(None, description="限定任务范围"),
     doc_type: str | None = Query(None, description="限定文件类型"),
     file_id: str | None = Query(None, description="限定单个文件"),
     prefer_source: str | None = Query(None, description="优先命中的源文件名关键词"),
@@ -360,15 +366,15 @@ async def query(
         3. LLM 生成：基于精排结果构建 context，调用 Qwen 生成答案
 
     典型用法：
-        ?q=注册资本是多少&company_id=company_001
-        ?q=2024年发票总金额&company_id=company_001&doc_type=invoice
+        ?q=注册资本是多少&task_id=task_001
+        ?q=2024年发票总金额&task_id=task_001&doc_type=invoice
     """
-    logger.info("[Query] q=%r company=%s type=%s", q, company_id, doc_type)
+    logger.info("[Query] q=%r task=%s type=%s", q, task_id, doc_type)
     hits, reranker_used = _retrieve_hits(
         q=q,
         top_k=top_k,
         score_threshold=score_threshold,
-        company_id=company_id,
+        task_id=task_id,
         doc_type=doc_type,
         file_id=file_id,
         prefer_source=prefer_source,
@@ -377,7 +383,7 @@ async def query(
     if not hits:
         return JSONResponse({
             "query":      q,
-            "company_id": company_id,
+            "task_id":    task_id,
             "answer":     "未找到相关内容，请确认文件已入库或放宽过滤条件。",
             "sources":    [],
             "chunks":     [],
@@ -391,10 +397,10 @@ async def query(
 
     # ── STEP 4: 获取企业名称 ─────────────────────────────────────────
     company_name: str | None = None
-    if company_id:
-        company = Dedup.get_company(company_id)
+    if task_id:
+        company = Dedup.get_company(task_id)
         if company:
-            company_name = company["name"]
+            company_name = company["company_name"]
 
     # ── STEP 5: 调 LLM ───────────────────────────────────────────────
     answer, llm_usage = await _call_llm(q, context, company_name=company_name)
@@ -410,7 +416,7 @@ async def query(
                 "file":          src.split("/")[-1],
                 "path":          src,
                 "doc_type":      hit.get("doc_type"),
-                "company_id":    hit.get("company_id"),
+                "task_id":       hit.get("task_id"),
                 "score":         hit.get("score"),
                 "rerank_score":  hit.get("rerank_score"),
             })
@@ -420,10 +426,10 @@ async def query(
 
     return JSONResponse({
         "query":      q,
-        "company_id": company_id,
+        "task_id":    task_id,
         "answer":     answer,
         "sources":    sources,
-        "chunks":     hits,
+        "chunks":     [_public_hit(hit) for hit in hits],
         "reranker":   reranker_used,
         "llm_usage":  llm_usage,
     })
@@ -440,7 +446,7 @@ async def query_extract(body: QueryExtractRequest):
         "[QueryExtract] service=%s q=%r company=%s type=%s",
         body.service_name,
         body.q,
-        body.company_id,
+        body.task_id,
         body.doc_type,
     )
 
@@ -473,26 +479,26 @@ async def query_extract(body: QueryExtractRequest):
         raise HTTPException(status_code=400, detail="user_prompt_template 必须包含 {text} 占位符")
 
     company_name = (body.company_name or "").strip() or None
-    if not company_name and body.company_id:
-        company = Dedup.get_company(body.company_id)
+    if not company_name and body.task_id:
+        company = Dedup.get_company(body.task_id)
         if company:
-            company_name = company.get("name")
+            company_name = company.get("company_name")
 
     request_q = _render_template_vars(
         request_q,
         company_name=company_name,
-        company_id=body.company_id,
+        task_id=body.task_id,
     )
     request_system_prompt = _render_template_vars(
         request_system_prompt,
         company_name=company_name,
-        company_id=body.company_id,
+        task_id=body.task_id,
         text="",
     )
     request_user_prompt_template = _render_template_vars(
         request_user_prompt_template,
         company_name=company_name,
-        company_id=body.company_id,
+        task_id=body.task_id,
         text="{text}",
     )
 
@@ -500,7 +506,7 @@ async def query_extract(body: QueryExtractRequest):
         q=request_q,
         top_k=body.top_k,
         score_threshold=body.score_threshold,
-        company_id=body.company_id,
+        task_id=body.task_id,
         doc_type=body.doc_type,
         file_id=body.file_id,
         prefer_source=body.prefer_source,
@@ -509,7 +515,7 @@ async def query_extract(body: QueryExtractRequest):
     if not hits:
         return JSONResponse({
             "query": request_q,
-            "company_id": body.company_id,
+            "task_id": body.task_id,
             "structured_data": None,
             "raw_output": None,
             "sources": [],
@@ -539,7 +545,7 @@ async def query_extract(body: QueryExtractRequest):
                 "file": src.split("/")[-1],
                 "path": src,
                 "doc_type": hit.get("doc_type"),
-                "company_id": hit.get("company_id"),
+                "task_id": hit.get("task_id"),
                 "score": hit.get("score"),
                 "rerank_score": hit.get("rerank_score"),
             })
@@ -547,7 +553,7 @@ async def query_extract(body: QueryExtractRequest):
     response: dict = {
         "query": request_q,
         "service_name": body.service_name,
-        "company_id": body.company_id,
+        "task_id": body.task_id,
         "company_name": company_name,
         "structured_data": structured_data,
         "sources": sources,
@@ -555,7 +561,7 @@ async def query_extract(body: QueryExtractRequest):
         "llm_usage": llm_usage,
     }
     if body.include_chunks:
-        response["chunks"] = hits
+        response["chunks"] = [_public_hit(hit) for hit in hits]
     if body.include_raw_llm_output:
         response["raw_output"] = raw_output
     return JSONResponse(response)

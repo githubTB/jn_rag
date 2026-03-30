@@ -5,7 +5,7 @@ Milvus collection schema：
     pk          INT64    主键（auto_id）
     chunk_id    VARCHAR  chunk 内容 SHA256（去重用）
     file_id     VARCHAR  文件 SHA256
-    company_id  VARCHAR  企业 ID
+    task_id     VARCHAR  任务 ID
     doc_type    VARCHAR  文件类型
     chunk_index INT64    块序号
     source      VARCHAR  原始文件路径
@@ -64,7 +64,14 @@ _collection: Any | None = None
 def _get_collection():
     global _collection
     if _collection is not None:
-        return _collection
+        try:
+            cached_fields = {field.name for field in _collection.schema.fields}
+            if "task_id" in cached_fields:
+                return _collection
+            logger.warning("[Milvus] 检测到过期 collection 缓存，自动刷新")
+        except Exception:
+            logger.warning("[Milvus] 读取缓存 collection 失败，自动刷新", exc_info=True)
+        _collection = None
 
     try:
         from pymilvus import (
@@ -78,14 +85,15 @@ def _get_collection():
     logger.info("[Milvus] 连接: %s:%s", settings.milvus_host, settings.milvus_port)
 
     col_name = settings.milvus_collection
-
-    if not utility.has_collection(col_name):
+    
+    def _create_collection():
+        nonlocal col_name
         schema = CollectionSchema(
             fields=[
                 FieldSchema("pk",          DataType.INT64,        is_primary=True, auto_id=True),
                 FieldSchema("chunk_id",    DataType.VARCHAR,      max_length=64),
                 FieldSchema("file_id",     DataType.VARCHAR,      max_length=64),
-                FieldSchema("company_id",  DataType.VARCHAR,      max_length=64),
+                FieldSchema("task_id",     DataType.VARCHAR,      max_length=64),
                 FieldSchema("doc_type",    DataType.VARCHAR,      max_length=32),
                 FieldSchema("chunk_index", DataType.INT64),
                 FieldSchema("source",      DataType.VARCHAR,      max_length=512),
@@ -97,8 +105,8 @@ def _get_collection():
             description="RAG document chunks",
             enable_dynamic_field=False,
         )
-        _collection = Collection(name=col_name, schema=schema)
-        _collection.create_index(
+        collection = Collection(name=col_name, schema=schema)
+        collection.create_index(
             field_name="vector",
             index_params={
                 "metric_type": "COSINE",
@@ -107,9 +115,28 @@ def _get_collection():
             },
         )
         logger.info("[Milvus] 集合已创建: %s", col_name)
+        return collection
+
+    if not utility.has_collection(col_name):
+        _collection = _create_collection()
     else:
-        _collection = Collection(name=col_name)
-        logger.debug("[Milvus] 使用已有集合: %s", col_name)
+        existing = Collection(name=col_name)
+        field_names = {field.name for field in existing.schema.fields}
+        if "task_id" not in field_names:
+            count = existing.num_entities
+            if count == 0:
+                logger.warning("[Milvus] 发现旧 schema 且集合为空，自动重建: %s", col_name)
+                existing.release()
+                utility.drop_collection(col_name)
+                _collection = _create_collection()
+            else:
+                raise RuntimeError(
+                    f"Milvus 集合 {col_name} 仍是旧 schema，缺少 task_id 字段；"
+                    f"当前有 {count} 条旧数据，请先清空并重建 collection 后再入库"
+                )
+        else:
+            _collection = existing
+            logger.debug("[Milvus] 使用已有集合: %s", col_name)
 
     _collection.load()
     return _collection
@@ -173,7 +200,7 @@ class Embedder:
         vectors: list[list[float]],
         file_id: str,
         chunk_hashes: list[str],
-        company_id: str | None = None,
+        task_id: str | None = None,
         doc_type: str = "unknown",
     ) -> int:
         if not chunks:
@@ -192,7 +219,7 @@ class Embedder:
             rows.append({
                 "chunk_id":    h,
                 "file_id":     file_id,
-                "company_id":  company_id or "",
+                "task_id":     task_id or "",
                 "doc_type":    doc_type[:32],
                 "chunk_index": chunk.metadata.get("chunk_index", i),
                 "source":      chunk.metadata.get("source", "")[:512],
@@ -226,7 +253,7 @@ class Embedder:
             limit=top_k,
             expr=filter_expr,
             output_fields=[
-                "chunk_id", "file_id", "company_id", "doc_type",
+                "chunk_id", "file_id", "task_id", "doc_type",
                 "source", "label", "content", "raw_content",
             ],
         )
@@ -238,7 +265,7 @@ class Embedder:
             hits.append({
                 "id":          hit.entity.get("chunk_id"),
                 "file_id":     hit.entity.get("file_id"),
-                "company_id":  hit.entity.get("company_id"),
+                "task_id":     hit.entity.get("task_id"),
                 "doc_type":    hit.entity.get("doc_type"),
                 "source":      hit.entity.get("source"),
                 "label":       hit.entity.get("label"),
@@ -271,14 +298,14 @@ class Embedder:
             expr=expr,
             limit=limit,
             output_fields=[
-                "chunk_id", "file_id", "company_id", "doc_type",
+                "chunk_id", "file_id", "task_id", "doc_type",
                 "source", "label", "content", "raw_content", "chunk_index",
             ],
         )
         return [{
             "id": row.get("chunk_id"),
             "file_id": row.get("file_id"),
-            "company_id": row.get("company_id"),
+            "task_id": row.get("task_id"),
             "doc_type": row.get("doc_type"),
             "source": row.get("source"),
             "label": row.get("label"),

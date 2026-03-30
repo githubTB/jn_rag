@@ -4,8 +4,8 @@ core/dedup.py — 去重工具类。
 数据库表结构
 -----------
 companies 表：
-    id                  TEXT PRIMARY KEY
-    name                TEXT
+    task_id             TEXT PRIMARY KEY
+    company_name        TEXT
     credit_code         TEXT
     created_at          TEXT
 
@@ -13,7 +13,7 @@ files 表：
     id                  TEXT PRIMARY KEY   -- 文件内容 SHA256
     filename            TEXT
     file_path           TEXT
-    company_id          TEXT
+    task_id             TEXT
     doc_type            TEXT               -- 文件类型（自动推断或人工确认）
     doc_type_confirmed  INTEGER DEFAULT 0  -- 0=自动推断 1=人工已确认
     status              TEXT               -- pending / done / failed
@@ -66,22 +66,22 @@ def _ensure_init() -> None:
     with _conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS companies (
-                id           TEXT PRIMARY KEY,
-                name         TEXT NOT NULL,
-                credit_code  TEXT,
-                created_at   TEXT NOT NULL
+                task_id       TEXT PRIMARY KEY,
+                company_name  TEXT NOT NULL,
+                credit_code   TEXT,
+                created_at    TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS files (
                 id                  TEXT PRIMARY KEY,
                 filename            TEXT NOT NULL,
                 file_path           TEXT NOT NULL,
-                company_id          TEXT,
+                task_id             TEXT,
                 doc_type            TEXT NOT NULL DEFAULT 'unknown',
                 doc_type_confirmed  INTEGER NOT NULL DEFAULT 0,
                 status              TEXT NOT NULL DEFAULT 'pending',
                 created_at          TEXT NOT NULL,
-                FOREIGN KEY (company_id) REFERENCES companies(id)
+                FOREIGN KEY (task_id) REFERENCES companies(task_id)
             );
 
             CREATE TABLE IF NOT EXISTS chunks (
@@ -92,22 +92,47 @@ def _ensure_init() -> None:
                 FOREIGN KEY (file_id) REFERENCES files(id)
             );
 
-            CREATE INDEX IF NOT EXISTS idx_files_company_id ON files(company_id);
+            CREATE INDEX IF NOT EXISTS idx_files_task_id    ON files(task_id);
             CREATE INDEX IF NOT EXISTS idx_files_doc_type   ON files(doc_type);
             CREATE INDEX IF NOT EXISTS idx_chunks_file_id   ON chunks(file_id);
         """)
+        try:
+            conn.execute("ALTER TABLE companies RENAME COLUMN id TO task_id")
+            logger.info("[Dedup] 已将 companies.id 重命名为 task_id")
+        except Exception:
+            pass
+        try:
+            conn.execute("ALTER TABLE companies RENAME COLUMN name TO company_name")
+            logger.info("[Dedup] 已将 companies.name 重命名为 company_name")
+        except Exception:
+            pass
         # 兼容旧库：如果 doc_type_confirmed 列不存在则补加
         try:
             conn.execute("ALTER TABLE files ADD COLUMN doc_type_confirmed INTEGER NOT NULL DEFAULT 0")
             logger.info("[Dedup] 已为旧库补加 doc_type_confirmed 列")
         except Exception:
             pass  # 列已存在，忽略
-        # 兼容旧库：如果 companies.credit_code 列不存在则补加
+        # 兼容旧库：如果 companies.company_name / credit_code 列不存在则补加
+        try:
+            conn.execute("ALTER TABLE companies ADD COLUMN company_name TEXT")
+            logger.info("[Dedup] 已为旧库补加 companies.company_name 列")
+        except Exception:
+            pass
         try:
             conn.execute("ALTER TABLE companies ADD COLUMN credit_code TEXT")
             logger.info("[Dedup] 已为旧库补加 companies.credit_code 列")
         except Exception:
             pass  # 列已存在，忽略
+        try:
+            conn.execute("ALTER TABLE files ADD COLUMN task_id TEXT")
+            logger.info("[Dedup] 已为旧库补加 files.task_id 列")
+        except Exception:
+            pass
+        try:
+            conn.execute("UPDATE companies SET company_name = COALESCE(company_name, '') WHERE company_name IS NULL")
+            conn.execute("UPDATE files SET task_id = COALESCE(task_id, '') WHERE task_id IS NULL")
+        except Exception:
+            pass
     _initialized = True
     logger.debug("[Dedup] 初始化完成: %s", _get_db_path())
 
@@ -156,8 +181,8 @@ class Dedup:
     @classmethod
     def register_company(
         cls,
-        company_id: str,
-        name: str,
+        task_id: str,
+        company_name: str,
         credit_code: str | None = None,
     ) -> None:
         _ensure_init()
@@ -166,21 +191,21 @@ class Dedup:
         with _conn() as conn:
             conn.execute(
                 """
-                INSERT INTO companies (id, name, credit_code, created_at) VALUES (?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
+                INSERT INTO companies (task_id, company_name, credit_code, created_at) VALUES (?, ?, ?, ?)
+                ON CONFLICT(task_id) DO UPDATE SET
+                    company_name = excluded.company_name,
                     credit_code = COALESCE(excluded.credit_code, companies.credit_code)
                 """,
-                (company_id, name, normalized_credit_code, now),
+                (task_id, company_name, normalized_credit_code, now),
             )
-        logger.info("[Dedup] 登记企业: %s (%s) credit_code=%s", name, company_id, normalized_credit_code or "-")
+        logger.info("[Dedup] 登记企业: %s (%s) credit_code=%s", company_name, task_id, normalized_credit_code or "-")
 
     @classmethod
-    def get_company(cls, company_id: str) -> dict | None:
+    def get_company(cls, task_id: str) -> dict | None:
         _ensure_init()
         with _conn() as conn:
             row = conn.execute(
-                "SELECT * FROM companies WHERE id = ?", (company_id,)
+                "SELECT * FROM companies WHERE task_id = ?", (task_id,)
             ).fetchone()
         return dict(row) if row else None
 
@@ -214,7 +239,7 @@ class Dedup:
         cls,
         file_path: str | Path,
         filename: str | None = None,
-        company_id: str | None = None,
+        task_id: str | None = None,
         doc_type: str = DocType.UNKNOWN,
         doc_type_confirmed: bool = False,
     ) -> str:
@@ -229,22 +254,22 @@ class Dedup:
         with _conn() as conn:
             conn.execute(
                 """
-                INSERT INTO files (id, filename, file_path, company_id, doc_type,
+                INSERT INTO files (id, filename, file_path, task_id, doc_type,
                                    doc_type_confirmed, status, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
                 ON CONFLICT(id) DO UPDATE SET
                     status              = 'pending',
                     file_path           = excluded.file_path,
                     filename            = excluded.filename,
-                    company_id          = excluded.company_id,
+                    task_id             = excluded.task_id,
                     doc_type            = excluded.doc_type,
                     doc_type_confirmed  = excluded.doc_type_confirmed
                 """,
-                (file_id, fname, str(path), company_id, dt, confirmed, now),
+                (file_id, fname, str(path), task_id, dt, confirmed, now),
             )
         logger.info(
-            "[Dedup] 登记文件: %s  company=%s  type=%s  confirmed=%s  id=%s",
-            fname, company_id, dt, confirmed, file_id[:12],
+            "[Dedup] 登记文件: %s  task=%s  type=%s  confirmed=%s  id=%s",
+            fname, task_id, dt, confirmed, file_id[:12],
         )
         return file_id
 
@@ -389,7 +414,7 @@ class Dedup:
     def list_files(
         cls,
         status: str | None = None,
-        company_id: str | None = None,
+        task_id: str | None = None,
         doc_type: str | None = None,
     ) -> list[dict]:
         _ensure_init()
@@ -398,9 +423,9 @@ class Dedup:
         if status:
             conditions.append("status = ?")
             params.append(status)
-        if company_id:
-            conditions.append("company_id = ?")
-            params.append(company_id)
+        if task_id:
+            conditions.append("task_id = ?")
+            params.append(task_id)
         if doc_type:
             conditions.append("doc_type = ?")
             params.append(doc_type)
@@ -421,14 +446,14 @@ class Dedup:
         logger.info("[Dedup] 删除记录: id=%s", file_id[:12])
 
     @classmethod
-    def delete_company(cls, company_id: str) -> int:
+    def delete_company(cls, task_id: str) -> int:
         _ensure_init()
-        files = cls.list_files(company_id=company_id)
+        files = cls.list_files(task_id=task_id)
         for f in files:
             cls.delete_file(f["id"])
         with _conn() as conn:
-            conn.execute("DELETE FROM companies WHERE id = ?", (company_id,))
-        logger.info("[Dedup] 删除企业: %s，共 %d 个文件", company_id, len(files))
+            conn.execute("DELETE FROM companies WHERE task_id = ?", (task_id,))
+        logger.info("[Dedup] 删除企业: %s，共 %d 个文件", task_id, len(files))
         return len(files)
 
     @classmethod

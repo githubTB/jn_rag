@@ -274,8 +274,8 @@ nav{display:flex;gap:2px}
         <div class="step-content">
           <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">填写企业信息</div>
           <div class="fg">
-            <label class="fl">企业 ID（唯一标识，建议英文+数字）</label>
-            <input class="fi" id="new-cid" placeholder="例：company_001"/>
+            <label class="fl">task_id（唯一标识，建议英文+数字）</label>
+            <input class="fi" id="new-cid" placeholder="例：task_001"/>
           </div>
           <div class="fg" style="margin-bottom:0">
             <label class="fl">企业名称</label>
@@ -407,6 +407,14 @@ let uploadedCompanyId = ''; // 上传成功后记录企业ID，用于入库
 let replaceTargetFileId = null;
 let replaceTargetFilename = null;
 
+function companyTaskId(company) {
+  return company?.task_id || '';
+}
+
+function companyDisplayName(company) {
+  return company?.company_name || '';
+}
+
 // ── 视图切换 ──────────────────────────────────────────────────────────────
 function switchView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -494,7 +502,7 @@ async function loadOverview() {
   }
   el.innerHTML = companies.map(c => `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid var(--border);font-size:.83rem;cursor:pointer" onclick="switchView('companies')">
-      <span style="font-weight:500">🏢 ${c.name}</span>
+      <span style="font-weight:500">🏢 ${companyDisplayName(c)}</span>
       <span style="color:var(--ink-muted)">${c.file_count} 文件 · ${c.done_count} 完成</span>
     </div>`).join('');
 }
@@ -518,9 +526,9 @@ async function loadCompanies() {
     return;
   }
   grid.innerHTML = companies.map(c => `
-    <div class="cc ${selectedCid===c.company_id?'sel':''}" onclick="selectCompany('${c.company_id}')">
-      <div class="cc-name">${c.name}</div>
-      <div class="cc-id">${c.company_id}</div>
+    <div class="cc ${selectedCid===companyTaskId(c)?'sel':''}" onclick="selectCompany('${companyTaskId(c)}')">
+      <div class="cc-name">${companyDisplayName(c)}</div>
+      <div class="cc-id">${companyTaskId(c)}</div>
       ${c.credit_code ? `<div class="cc-meta">统一社会信用代码：${esc(c.credit_code)}</div>` : ''}
       <div class="cc-stats">
         <div><div class="cc-stat-v">${c.file_count}</div><div class="cc-stat-l">文件</div></div>
@@ -535,7 +543,7 @@ async function selectCompany(cid) {
   loadCompanies();
   try {
     const d = await fetch(`/api/companies/${cid}`).then(r=>r.json());
-    document.getElementById('detail-name').textContent = d.name;
+    document.getElementById('detail-name').textContent = d.company_name || cid;
     document.getElementById('detail-credit-code').textContent = d.credit_code ? `统一社会信用代码：${d.credit_code}` : '';
     const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
     document.getElementById('detail-confirm-badge').textContent =
@@ -767,8 +775,8 @@ async function handleSingleFileUpload(input) {
     return;
   }
 
-  const company = companies.find(c => c.company_id === selectedCid);
-  const companyName = company?.name || document.getElementById('detail-name').textContent.trim() || selectedCid;
+  const company = companies.find(c => companyTaskId(c) === selectedCid);
+  const companyName = companyDisplayName(company) || document.getElementById('detail-name').textContent.trim() || selectedCid;
   const companyCreditCode = company?.credit_code || '';
   const btn = document.getElementById('upload-single-btn');
   const oldText = btn.innerHTML;
@@ -777,7 +785,7 @@ async function handleSingleFileUpload(input) {
   btn.innerHTML = '<span class="spin">📤</span> 上传中…';
 
   const fd = new FormData();
-  fd.append('company_id', selectedCid);
+  fd.append('task_id', selectedCid);
   fd.append('company_name', companyName);
   fd.append('company_credit_code', companyCreditCode);
   fd.append('files', file);
@@ -837,7 +845,7 @@ async function doFolderUpload() {
   const cname = document.getElementById('new-cname').value.trim();
   const creditCode = document.getElementById('new-credit-code').value.trim();
 
-  if (!cid)   { toast('请填写企业 ID','warning'); return; }
+  if (!cid)   { toast('请填写 task_id','warning'); return; }
   if (!cname) { toast('请填写企业名称','warning'); return; }
   if (!folderFiles.length) { toast('请先选择文件夹','warning'); return; }
 
@@ -862,7 +870,7 @@ async function doFolderUpload() {
     stat.textContent = `上传中 ${i+1}~${Math.min(i+BATCH, folderFiles.length)} / ${folderFiles.length}`;
 
     const fd = new FormData();
-    fd.append('company_id', cid);
+    fd.append('task_id', cid);
     fd.append('company_name', cname);
     fd.append('company_credit_code', creditCode);
     batch.forEach(f => {
@@ -967,7 +975,7 @@ async function doSearch() {
   document.getElementById('answer-card').style.display='none';
   try {
     let url = `/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
-    if (cid) url+=`&company_id=${encodeURIComponent(cid)}`;
+    if (cid) url+=`&task_id=${encodeURIComponent(cid)}`;
     if (preferSource) url+=`&prefer_source=${encodeURIComponent(preferSource)}`;
     if (dt)  url+=`&doc_type=${encodeURIComponent(dt)}`;
     const r = await fetch(url);
@@ -989,7 +997,7 @@ async function doSearch() {
           <div class="ri-top">
             <div class="ri-num">${i+1}</div>
             <div class="ri-meta">
-              ${h.company_id?`<span class="tag tg-document" style="margin-right:5px">🏢 ${h.company_id}</span>`:''}
+              ${h.task_id?`<span class="tag tg-document" style="margin-right:5px">🏢 ${h.task_id}</span>`:''}
               <span class="tag tg-${h.doc_type||'unknown'}">${TYPE_LABEL[h.doc_type]||h.doc_type||'未知'}</span>
               <span style="margin-left:6px">${renderResultFileLink(h)}</span>
             </div>
@@ -1031,7 +1039,7 @@ document.getElementById('qi').addEventListener('keydown', e => { if(e.key==='Ent
 function refreshSelects() {
   const el = document.getElementById('q-company');
   const first = el.options[0].outerHTML;
-  el.innerHTML = first + companies.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
+  el.innerHTML = first + companies.map(c=>`<option value="${companyTaskId(c)}">${companyDisplayName(c)}</option>`).join('');
   refreshPreferSourceOptions();
 }
 

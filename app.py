@@ -11,8 +11,8 @@ app.py — RAG 知识库 API + 前端托管。
   DELETE /api/files/{file_id}    删除文件
   POST   /api/companies          创建企业
   GET    /api/companies          企业列表
-  GET    /api/companies/{id}     企业详情
-  DELETE /api/companies/{id}     删除企业
+  GET    /api/companies/{task_id}     企业详情
+  DELETE /api/companies/{task_id}     删除企业
   GET    /api/search             纯向量检索
   GET    /api/query              向量检索 + LLM 问答
 
@@ -139,6 +139,8 @@ async def drop_collection():
     from scripts.cleanup import _drop_milvus_collection
     from config.settings import settings
     from core.embedder import Embedder
+    import core.embedder as embedder_module
+    import redis
 
     _drop_milvus_collection(settings.milvus_collection)
     # 清 SQLite
@@ -149,10 +151,40 @@ async def drop_collection():
         conn.execute("DELETE FROM files")
         conn.execute("DELETE FROM companies")
 
+    # 清 Redis：broker 队列 + result backend
+    redis_cleared: list[str] = []
+    try:
+        broker = redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            db=settings.redis_db_broker,
+            password=settings.redis_password or None,
+        )
+        broker.flushdb()
+        redis_cleared.append(f"broker_db={settings.redis_db_broker}")
+    except Exception as exc:
+        logger.warning("清理 Redis broker 失败: %s", exc)
+
+    try:
+        backend = redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            db=settings.redis_db_backend,
+            password=settings.redis_password or None,
+        )
+        backend.flushdb()
+        redis_cleared.append(f"backend_db={settings.redis_db_backend}")
+    except Exception as exc:
+        logger.warning("清理 Redis backend 失败: %s", exc)
+
+    # 清进程内缓存，确保当前 API 进程也拿到新 schema
+    embedder_module._collection = None
+
     # 立即触发重建，确保集合结构和名称恢复到当前配置值。
     Embedder.count()
     return {
-        "message": "知识库已清空并重建",
+        "message": "知识库、SQLite 和 Redis 队列已清空并重建",
         "collection": settings.milvus_collection,
+        "redis_cleared": redis_cleared,
     }
     

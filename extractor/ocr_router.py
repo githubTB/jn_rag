@@ -27,7 +27,7 @@ def route_ocr(
     doc_type: str = "unknown",
     **kwargs,
 ) -> list[Document]:
-    """所有图片走远程 PaddleOCR-VL。"""
+    """所有图片走远程 OCR-VL。"""
     logger.info("[OCRRouter] %s  doc_type=%s", Path(file_path).name, doc_type)
 
     from extractor.image_extractor import ImageExtractor

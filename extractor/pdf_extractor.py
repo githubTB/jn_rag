@@ -38,8 +38,8 @@ class PdfExtractor(BaseExtractor):
         extract_images: bool = False,
         doc_type: str = "document",
         # OCR 参数（扫描件时透传给 VL）
-        vl_rec_backend: str | None = None,
-        vl_rec_server_url: str | None = None,
+        vl_backend: str | None = None,
+        vl_base_url: str | None = None,
         device: str | None = None,
         **_ignored,
     ):
@@ -47,9 +47,9 @@ class PdfExtractor(BaseExtractor):
         self._extract_images = extract_images
         self._doc_type = doc_type
         self._vl_kwargs = {k: v for k, v in {
-            "vl_rec_backend":    vl_rec_backend,
-            "vl_rec_server_url": vl_rec_server_url,
-            "device":            device,
+            "vl_backend":    vl_backend,
+            "vl_base_url":   vl_base_url,
+            "device":        device,
         }.items() if v is not None}
 
     def extract(self) -> list[Document]:
@@ -131,9 +131,9 @@ class PdfExtractor(BaseExtractor):
 
         vl_kwargs = {}
         if settings.vl_backend:
-            vl_kwargs["vl_rec_backend"] = settings.vl_backend
+            vl_kwargs["vl_backend"] = settings.vl_backend
         if settings.vl_base_url:
-            vl_kwargs["vl_rec_server_url"] = settings.vl_base_url
+            vl_kwargs["vl_server_url"] = settings.vl_base_url
         if settings.vl_model:
             vl_kwargs["vl_model"] = settings.vl_model
         if settings.vl_device:

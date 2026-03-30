@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def ingest_file(
     self,
     file_path: str,
-    company_id: str | None = None,
+    task_id: str | None = None,
     doc_type: str = "unknown",
     doc_type_confirmed: bool = False,
     force: bool = False,
@@ -36,7 +36,7 @@ def ingest_file(
     Parameters
     ----------
     file_path  : 文件路径
-    company_id : 企业 ID
+    task_id    : 任务 ID
     doc_type   : 文件类型
     force      : 是否强制重新处理
 
@@ -44,12 +44,12 @@ def ingest_file(
     -------
     dict，含 status / file_id / chunks / elapsed 等
     """
-    logger.info("[CeleryTask] 开始: %s  company=%s  type=%s",
-                Path(file_path).name, company_id, doc_type)
+    logger.info("[CeleryTask] 开始: %s  task=%s  type=%s",
+                Path(file_path).name, task_id, doc_type)
     try:
         result = IngestTask.run(
             file_path,
-            company_id=company_id,
+            task_id=task_id,
             doc_type=doc_type,
             doc_type_confirmed=doc_type_confirmed,
             force=force,
@@ -70,7 +70,7 @@ def ingest_file(
 def ingest_batch(
     self,
     tasks: list[dict],
-    company_id: str,
+    task_id: str,
 ) -> dict:
     """
     批量入库任务（扫描目录后用）。
@@ -79,7 +79,7 @@ def ingest_batch(
     Parameters
     ----------
     tasks      : [{"path": ..., "doc_type": ...}, ...]
-    company_id : 企业 ID
+    task_id    : 任务 ID
 
     Returns
     -------
@@ -89,7 +89,7 @@ def ingest_batch(
     results = []
     ok = fail = skip = 0
 
-    logger.info("[CeleryBatch] 开始批量入库: company=%s  共 %d 个文件", company_id, total)
+    logger.info("[CeleryBatch] 开始批量入库: task=%s  共 %d 个文件", task_id, total)
 
     for i, task in enumerate(tasks, 1):
         file_path = task["path"]
@@ -102,7 +102,7 @@ def ingest_batch(
         try:
             result = IngestTask.run(
                 file_path,
-                company_id=company_id,
+                task_id=task_id,
                 doc_type=doc_type,
                 doc_type_confirmed=doc_type_confirmed,
             )
@@ -122,7 +122,7 @@ def ingest_batch(
 
     return {
         "status":     "done",
-        "company_id": company_id,
+        "task_id":    task_id,
         "total":      total,
         "ok":         ok,
         "skipped":    skip,

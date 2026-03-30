@@ -10,16 +10,16 @@ core/tasks.py — 完整入库流水线。
     # 单文件，带企业和类型
     result = IngestTask.run(
         "uploads/营业执照.jpg",
-        company_id="company_001",
+        task_id="task_001",
         doc_type="license",
     )
 
     # 同步调用（适合调试）
-    result = IngestTask.run("uploads/合同.pdf", company_id="company_001", sync=True)
+    result = IngestTask.run("uploads/合同.pdf", task_id="task_001", sync=True)
 
     # 异步（FastAPI BackgroundTasks）
     background_tasks.add_task(IngestTask.run, file_path,
-                               company_id=company_id, doc_type=doc_type)
+                               task_id=task_id, doc_type=doc_type)
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ class IngestTask:
         cls,
         file_path: str,
         *,
-        company_id: str | None = None,
+        task_id: str | None = None,
         doc_type: str = DocType.UNKNOWN,
         doc_type_confirmed: bool = False,
         force: bool = False,
@@ -77,21 +77,21 @@ class IngestTask:
         Parameters
         ----------
         file_path      : 已保存到磁盘的文件路径
-        company_id     : 所属企业 ID（None 表示不关联企业）
+        task_id        : 所属任务 ID（None 表示不关联任务）
         doc_type       : 文件类型，见 DocType 常量
         force          : True = 忽略去重，强制重新处理
         extract_kwargs : 透传给 ExtractProcessor.extract() 的额外参数
 
         Returns
         -------
-        dict，含 status / file_id / company_id / doc_type / 各步骤数量 / elapsed
+        dict，含 status / file_id / task_id / doc_type / 各步骤数量 / elapsed
         """
         path  = Path(file_path)
         start = time.perf_counter()
 
         logger.info("=" * 60)
-        logger.info("[Task] 开始: %s  company=%s  type=%s",
-                    path.name, company_id, doc_type)
+        logger.info("[Task] 开始: %s  task=%s  type=%s",
+                    path.name, task_id, doc_type)
         logger.info("[Task] 文件大小: %.2f MB", path.stat().st_size / 1024 / 1024)
 
         # ── STEP 0: 文件级去重 ─────────────────────────────────────────
@@ -101,13 +101,13 @@ class IngestTask:
                 "status":     "skipped",
                 "reason":     "文件已入库",
                 "file":       str(path),
-                "company_id": company_id,
+                "task_id":    task_id,
                 "doc_type":   doc_type,
             }
 
         file_id = Dedup.register_file(
             path,
-            company_id=company_id,
+            task_id=task_id,
             doc_type=doc_type,
             doc_type_confirmed=doc_type_confirmed,
         )
@@ -115,7 +115,7 @@ class IngestTask:
 
         try:
             result = cls._run_pipeline(
-                path, file_id, company_id, doc_type, extract_kwargs or {}
+                path, file_id, task_id, doc_type, extract_kwargs or {}
             )
         except Exception as exc:
             Dedup.mark_failed(file_id)
@@ -124,7 +124,7 @@ class IngestTask:
                 "status":     "failed",
                 "file_id":    file_id,
                 "file":       str(path),
-                "company_id": company_id,
+                "task_id":    task_id,
                 "doc_type":   doc_type,
                 "error":      str(exc),
                 "elapsed":    round(time.perf_counter() - start, 2),
@@ -148,7 +148,7 @@ class IngestTask:
         cls,
         path: Path,
         file_id: str,
-        company_id: str | None,
+        task_id: str | None,
         doc_type: str,
         extract_kwargs: dict,
     ) -> dict:
@@ -158,11 +158,8 @@ class IngestTask:
         t0 = time.perf_counter()
 
         ocr_defaults = {
-            "vl_rec_backend":    settings.vl_backend,
-            "vl_rec_server_url": settings.vl_base_url,
-            "vl_model":          settings.vl_model,
-            "max_pixels":        settings.vl_max_px,
-            "timeout":           settings.vl_timeout,
+            "vl_backend":        settings.vl_backend,
+            "vl_base_url":       settings.vl_base_url,
             "device":            settings.vl_device,
             "max_file_mb":       settings.vl_max_file_mb,
             "doc_type":          doc_type,
@@ -228,7 +225,7 @@ class IngestTask:
                 "status":     "done",
                 "file_id":    file_id,
                 "file":       str(path),
-                "company_id": company_id,
+                "task_id":    task_id,
                 "doc_type":   doc_type,
                 "docs":       len(docs),
                 "chunks":     len(chunks),
@@ -251,7 +248,7 @@ class IngestTask:
 
         written = Embedder.store(
             new_chunks, vectors, file_id, new_hashes,
-            company_id=company_id,
+            task_id=task_id,
             doc_type=doc_type,
         )
         logger.info("[Task] 落库: %d 条，%.2fs", written, time.perf_counter() - t0)
@@ -267,7 +264,7 @@ class IngestTask:
             "status":     "done",
             "file_id":    file_id,
             "file":       str(path),
-            "company_id": company_id,
+            "task_id":    task_id,
             "doc_type":   doc_type,
             "docs":       len(docs),
             "chunks":     len(chunks),

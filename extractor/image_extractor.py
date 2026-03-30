@@ -83,9 +83,9 @@ class ImageExtractor(BaseExtractor):
         file_path: str,
         *,
         max_file_mb: float = 50.0,
-        vl_rec_backend: str | None = None,
-        vl_rec_server_url: str | None = None,
-        vl_rec_max_concurrency: int = 1,
+        vl_backend: str | None = None,
+        vl_base_url: str | None = None,
+        vl_max_concurrency: int = 1,
         output_format: str = "markdown",
         doc_type: str = "unknown",
         use_layout_detection: bool | None = None,
@@ -100,16 +100,17 @@ class ImageExtractor(BaseExtractor):
         self._max_file_mb = max_file_mb
         self._doc_type = doc_type
         self._output_format = output_format
-        self._vl_rec_max_concurrency = vl_rec_max_concurrency
+        self._vl_max_concurrency = vl_max_concurrency
         self._max_pixels = max_pixels
-        self._vl_rec_device = device or settings.vl_device
+        self._vl_device = settings.vl_device
         self._vl_timeout = settings.vl_timeout
 
         # 统一通过 settings 读取配置，构造参数只作为显式覆盖。
-        self._vl_rec_backend    = vl_rec_backend or settings.vl_backend
-        self._vl_rec_server_url = vl_rec_server_url or settings.vl_base_url
+        self._vl_backend  = settings.vl_backend
+        self._vl_base_url = settings.vl_base_url
+        self._vl_model = settings.vl_model
 
-        logger.debug("[OCR] backend=%s", self._vl_rec_backend)
+        logger.debug("[OCR] backend=%s", self._vl_backend)
 
     def extract(self) -> list[Document]:
         path = Path(self._file_path)
@@ -121,13 +122,13 @@ class ImageExtractor(BaseExtractor):
         tmp_path = self._preprocess_image(path)
         infer_path = str(tmp_path) if tmp_path else self._file_path
 
-        logger.info("[OCR] 开始推理: %s  backend=%s", path.name, self._vl_rec_backend)
+        logger.info("[OCR] 开始推理: %s  backend=%s", path.name, self._vl_backend)
         try:
             # 根据 backend 分流
-            if self._vl_rec_backend == "ollama":
+            if self._vl_backend == "ollama":
                 results = self._run_ollama(infer_path)
             else:
-                results = self._run_paddleocr_vl(infer_path)
+                results = self._run_ocr_vl(infer_path)
         finally:
             if tmp_path and tmp_path.exists():
                 try:
@@ -176,7 +177,7 @@ class ImageExtractor(BaseExtractor):
             img_b64 = base64.b64encode(f.read()).decode()
 
         payload = {
-            "model": self.vl_model,
+            "model": self._vl_model,
             "messages": [
                 {
                     "role": "user",
@@ -187,8 +188,8 @@ class ImageExtractor(BaseExtractor):
             "stream": False,
         }
 
-        url = f"{self._vl_rec_server_url.rstrip('/')}/api/chat"
-        logger.info("[Ollama] 请求: %s  model=%s", url, self._vl_rec_model)
+        url = f"{self._vl_base_url.rstrip('/')}/api/chat"
+        logger.info("[Ollama] 请求: %s  model=%s", url, self._vl_model)
 
         req = urllib.request.Request(
             url,
@@ -197,7 +198,7 @@ class ImageExtractor(BaseExtractor):
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=self.vl_timeout) as resp:
+            with urllib.request.urlopen(req, timeout=self._vl_timeout) as resp:
                 data = json.loads(resp.read())
             text = data.get("message", {}).get("content", "").strip()
             logger.info("[Ollama] 识别完成: %d 字符", len(text))
@@ -219,8 +220,8 @@ class ImageExtractor(BaseExtractor):
     #  PaddleOCR-VL 远程后端
     # ------------------------------------------------------------------
 
-    def _run_paddleocr_vl(self, infer_path: str) -> list[tuple[str, dict]]:
-        """走远程 PaddleOCR-VL（vLLM 服务）。"""
+    def _run_ocr_vl(self, infer_path: str) -> list[tuple[str, dict]]:
+        """走远程 OCR-VL（vLLM 服务）。"""
         pipeline = _get_pipeline(**self._build_vl_init_kwargs())
         parsed: list[tuple[str, dict]] = []
         try:
@@ -235,12 +236,12 @@ class ImageExtractor(BaseExtractor):
         return parsed
 
     def _build_vl_init_kwargs(self) -> dict:
-        kwargs: dict = {"vl_rec_max_concurrency": self._vl_rec_max_concurrency}
-        if self._vl_rec_backend:
-            kwargs["vl_rec_backend"] = self._vl_rec_backend
-        if self._vl_rec_server_url:
-            kwargs["vl_rec_server_url"] = self._vl_rec_server_url
-        logger.info("[VL] 参数: backend=%s url=%s", self._vl_rec_backend, self._vl_rec_server_url)
+        kwargs: dict = {"vl_max_concurrency": self._vl_max_concurrency}
+        if self._vl_backend:
+            kwargs["vl_backend"] = self._vl_backend
+        if self._vl_base_url:
+            kwargs["vl_base_url"] = self._vl_base_url
+        logger.info("[OCR] 参数: backend=%s url=%s", self._vl_backend, self._vl_base_url)
         return kwargs
 
     def _parse_vl_result(self, result) -> list[tuple[str, dict]]:
