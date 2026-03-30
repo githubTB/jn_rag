@@ -37,7 +37,7 @@ nav{display:flex;gap:2px}
 .ch .ic{color:var(--accent);font-size:0.95rem}
 .cb{padding:18px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
-.g2.companies-layout{grid-template-columns:1fr 1fr}
+.g2.companies-layout{grid-template-columns:minmax(320px,400px) minmax(0,1fr)}
 .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
 @media(max-width:860px){.g2{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}}
 .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
@@ -220,11 +220,84 @@ nav{display:flex;gap:2px}
 
 <!-- 企业管理 -->
 <div class="view" id="view-companies">
-  <div>
+  <div class="g2 companies-layout">
+      <div>
+        <div class="card">
+          <div class="ch"><span class="ic">➕</span>添加企业并上传文件</div>
+          <div class="cb" id="create-company-panel">
+            <div class="step-row">
+              <span class="step-badge" id="step1-badge">1</span>
+              <div class="step-content">
+                <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">填写企业信息</div>
+                <div class="fg">
+                  <label class="fl">task_id（唯一标识，建议英文+数字）</label>
+                  <input class="fi" id="new-cid" placeholder="例：task_001"/>
+                </div>
+                <div class="fg" style="margin-bottom:0">
+                  <label class="fl">企业名称</label>
+                  <input class="fi" id="new-cname" placeholder="重庆××有限公司"/>
+                </div>
+                <div class="fg" style="margin-bottom:0;margin-top:12px">
+                  <label class="fl">统一社会信用代码</label>
+                  <input class="fi" id="new-credit-code" placeholder="9150xxxxxxxxxxxxxx"/>
+                </div>
+              </div>
+            </div>
+
+            <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+            <div class="step-row">
+              <span class="step-badge" id="step2-badge">2</span>
+              <div class="step-content">
+                <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">选择企业资料文件夹</div>
+                <div class="folder-dz" id="folder-dz" onclick="document.getElementById('folder-input').click()">
+                  <input type="file" id="folder-input" webkitdirectory multiple/>
+                  <div style="font-size:2rem;opacity:.4;margin-bottom:8px">📁</div>
+                  <div style="font-size:.87rem;color:var(--ink-soft);font-weight:500">点击选择文件夹</div>
+                  <div style="font-size:.75rem;color:var(--ink-muted);margin-top:4px">支持整个目录，保持子目录结构</div>
+                </div>
+                <div id="folder-summary" style="display:none;margin-top:10px;padding:10px 12px;background:var(--paper);border-radius:8px;font-size:.82rem">
+                  <div id="folder-summary-text"></div>
+                  <div class="upload-file-list" id="folder-file-list"></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+            <div class="step-row">
+              <span class="step-badge" id="step3-badge">3</span>
+              <div class="step-content">
+                <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">上传文件到服务器</div>
+                <div class="prog" id="upload-prog"><div class="prog-bar" id="upload-bar" style="width:0"></div></div>
+                <div style="font-size:.73rem;color:var(--ink-muted);margin:4px 0 8px" id="upload-status"></div>
+                <button class="btn btn-p btn-fw" id="upload-btn" onclick="doFolderUpload()">
+                  📤 上传文件夹
+                </button>
+              </div>
+            </div>
+
+            <div style="height:1px;background:var(--border);margin:12px 0"></div>
+
+            <div class="step-row" style="margin-bottom:0">
+              <span class="step-badge" id="step4-badge">4</span>
+              <div class="step-content">
+                <div style="font-weight:600;font-size:.85rem;margin-bottom:4px">开始入库</div>
+                <div style="font-size:.78rem;color:var(--ink-muted);margin-bottom:8px">文件上传完成后，点击开始解析并写入知识库</div>
+                <button class="btn btn-p btn-fw" id="scan-async-btn" onclick="doNewScan(false)" disabled>
+                  🚀 开始入库
+                </button>
+                <div class="slog" id="scan-log"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <span style="font-weight:600;font-size:.95rem">企业列表</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-p btn-sm" onclick="scrollToCreateCompany()">➕ 添加企业</button>
           <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
         </div>
       </div>
@@ -261,80 +334,7 @@ nav{display:flex;gap:2px}
         </div>
         <div class="slog" id="rescan-log" style="margin:0 12px 12px"></div>
       </div>
-  </div>
-</div>
-
-<div class="modal" id="m-create-company">
-  <div class="mbox" style="max-width:760px">
-    <button class="mclose" onclick="closeModal('m-create-company')">✕</button>
-    <div class="mtitle">新建企业并上传资料</div>
-    <div id="create-company-panel">
-      <div class="step-row">
-        <span class="step-badge" id="step1-badge">1</span>
-        <div class="step-content">
-          <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">填写企业信息</div>
-          <div class="fg">
-            <label class="fl">task_id（唯一标识，建议英文+数字）</label>
-            <input class="fi" id="new-cid" placeholder="例：task_001"/>
-          </div>
-          <div class="fg" style="margin-bottom:0">
-            <label class="fl">企业名称</label>
-            <input class="fi" id="new-cname" placeholder="重庆××有限公司"/>
-          </div>
-          <div class="fg" style="margin-bottom:0;margin-top:12px">
-            <label class="fl">统一社会信用代码</label>
-            <input class="fi" id="new-credit-code" placeholder="9150xxxxxxxxxxxxxx"/>
-          </div>
-        </div>
       </div>
-
-      <div style="height:1px;background:var(--border);margin:12px 0"></div>
-
-      <div class="step-row">
-        <span class="step-badge" id="step2-badge">2</span>
-        <div class="step-content">
-          <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">选择企业资料文件夹</div>
-          <div class="folder-dz" id="folder-dz" onclick="document.getElementById('folder-input').click()">
-            <input type="file" id="folder-input" webkitdirectory multiple/>
-            <div style="font-size:2rem;opacity:.4;margin-bottom:8px">📁</div>
-            <div style="font-size:.87rem;color:var(--ink-soft);font-weight:500">点击选择文件夹</div>
-            <div style="font-size:.75rem;color:var(--ink-muted);margin-top:4px">支持整个目录，保持子目录结构</div>
-          </div>
-          <div id="folder-summary" style="display:none;margin-top:10px;padding:10px 12px;background:var(--paper);border-radius:8px;font-size:.82rem">
-            <div id="folder-summary-text"></div>
-            <div class="upload-file-list" id="folder-file-list"></div>
-          </div>
-        </div>
-      </div>
-
-      <div style="height:1px;background:var(--border);margin:12px 0"></div>
-
-      <div class="step-row">
-        <span class="step-badge" id="step3-badge">3</span>
-        <div class="step-content">
-          <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">上传文件到服务器</div>
-          <div class="prog" id="upload-prog"><div class="prog-bar" id="upload-bar" style="width:0"></div></div>
-          <div style="font-size:.73rem;color:var(--ink-muted);margin:4px 0 8px" id="upload-status"></div>
-          <button class="btn btn-p btn-fw" id="upload-btn" onclick="doFolderUpload()">
-            📤 上传文件夹
-          </button>
-        </div>
-      </div>
-
-      <div style="height:1px;background:var(--border);margin:12px 0"></div>
-
-      <div class="step-row" style="margin-bottom:0">
-        <span class="step-badge" id="step4-badge">4</span>
-        <div class="step-content">
-          <div style="font-weight:600;font-size:.85rem;margin-bottom:4px">开始入库</div>
-          <div style="font-size:.78rem;color:var(--ink-muted);margin-bottom:8px">文件上传完成后，点击开始解析并写入知识库</div>
-          <button class="btn btn-p btn-fw" id="scan-async-btn" onclick="doNewScan(false)" disabled>
-            🚀 开始入库
-          </button>
-          <div class="slog" id="scan-log"></div>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -953,12 +953,6 @@ async function _doScan(cid, sync, logId, btnAsync) {
   } finally {
     btnAsync.disabled = false;
   }
-}
-
-function scrollToCreateCompany() {
-  switchView('companies');
-  openModal('m-create-company');
-  setTimeout(() => document.getElementById('new-cid')?.focus(), 0);
 }
 
 // ── 智能问答 ──────────────────────────────────────────────────────────────
