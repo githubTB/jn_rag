@@ -81,6 +81,7 @@ nav{display:flex;gap:2px}
 .cc.sel{background:var(--accent-bg)}
 .cc-name{font-weight:600;font-size:0.93rem;margin-bottom:4px}
 .cc-id{font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--ink-muted);margin-bottom:10px}
+.cc-meta{font-family:'JetBrains Mono',monospace;font-size:0.69rem;color:var(--ink-muted);margin:-4px 0 10px}
 .cc-stats{display:flex;gap:14px}
 .cc-stat-v{font-size:1.05rem;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace}
 .cc-stat-l{font-size:0.67rem;color:var(--ink-muted)}
@@ -236,6 +237,7 @@ nav{display:flex;gap:2px}
         <div class="ch">
           <span class="ic">📁</span>
           <span id="detail-name"></span>
+          <span id="detail-credit-code" style="font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--ink-muted);margin-left:8px"></span>
           <span id="detail-confirm-badge" style="margin-left:6px;font-size:.72rem;color:var(--ink-muted)"></span>
           <span style="flex:1"></span>
           <input type="file" id="single-file-input" style="display:none" onchange="handleSingleFileUpload(this)"/>
@@ -278,6 +280,10 @@ nav{display:flex;gap:2px}
           <div class="fg" style="margin-bottom:0">
             <label class="fl">企业名称</label>
             <input class="fi" id="new-cname" placeholder="重庆××有限公司"/>
+          </div>
+          <div class="fg" style="margin-bottom:0;margin-top:12px">
+            <label class="fl">统一社会信用代码</label>
+            <input class="fi" id="new-credit-code" placeholder="9150xxxxxxxxxxxxxx"/>
           </div>
         </div>
       </div>
@@ -515,6 +521,7 @@ async function loadCompanies() {
     <div class="cc ${selectedCid===c.company_id?'sel':''}" onclick="selectCompany('${c.company_id}')">
       <div class="cc-name">${c.name}</div>
       <div class="cc-id">${c.company_id}</div>
+      ${c.credit_code ? `<div class="cc-meta">统一社会信用代码：${esc(c.credit_code)}</div>` : ''}
       <div class="cc-stats">
         <div><div class="cc-stat-v">${c.file_count}</div><div class="cc-stat-l">文件</div></div>
         <div><div class="cc-stat-v">${c.done_count}</div><div class="cc-stat-l">完成</div></div>
@@ -529,6 +536,7 @@ async function selectCompany(cid) {
   try {
     const d = await fetch(`/api/companies/${cid}`).then(r=>r.json());
     document.getElementById('detail-name').textContent = d.name;
+    document.getElementById('detail-credit-code').textContent = d.credit_code ? `统一社会信用代码：${d.credit_code}` : '';
     const confirmed = (d.files||[]).filter(f=>f.doc_type_confirmed).length;
     document.getElementById('detail-confirm-badge').textContent =
       d.files.length ? `已确认 ${confirmed}/${d.files.length}` : '';
@@ -761,6 +769,7 @@ async function handleSingleFileUpload(input) {
 
   const company = companies.find(c => c.company_id === selectedCid);
   const companyName = company?.name || document.getElementById('detail-name').textContent.trim() || selectedCid;
+  const companyCreditCode = company?.credit_code || '';
   const btn = document.getElementById('upload-single-btn');
   const oldText = btn.innerHTML;
 
@@ -770,6 +779,7 @@ async function handleSingleFileUpload(input) {
   const fd = new FormData();
   fd.append('company_id', selectedCid);
   fd.append('company_name', companyName);
+  fd.append('company_credit_code', companyCreditCode);
   fd.append('files', file);
   fd.append('relative_paths', file.name);
 
@@ -825,6 +835,7 @@ document.getElementById('folder-input').addEventListener('change', function() {
 async function doFolderUpload() {
   const cid   = document.getElementById('new-cid').value.trim();
   const cname = document.getElementById('new-cname').value.trim();
+  const creditCode = document.getElementById('new-credit-code').value.trim();
 
   if (!cid)   { toast('请填写企业 ID','warning'); return; }
   if (!cname) { toast('请填写企业名称','warning'); return; }
@@ -853,6 +864,7 @@ async function doFolderUpload() {
     const fd = new FormData();
     fd.append('company_id', cid);
     fd.append('company_name', cname);
+    fd.append('company_credit_code', creditCode);
     batch.forEach(f => {
       fd.append('files', f);
       fd.append('relative_paths', f.webkitRelativePath);

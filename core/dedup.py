@@ -4,9 +4,10 @@ core/dedup.py — 去重工具类。
 数据库表结构
 -----------
 companies 表：
-    id          TEXT PRIMARY KEY
-    name        TEXT
-    created_at  TEXT
+    id                  TEXT PRIMARY KEY
+    name                TEXT
+    credit_code         TEXT
+    created_at          TEXT
 
 files 表：
     id                  TEXT PRIMARY KEY   -- 文件内容 SHA256
@@ -65,9 +66,10 @@ def _ensure_init() -> None:
     with _conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS companies (
-                id          TEXT PRIMARY KEY,
-                name        TEXT NOT NULL,
-                created_at  TEXT NOT NULL
+                id           TEXT PRIMARY KEY,
+                name         TEXT NOT NULL,
+                credit_code  TEXT,
+                created_at   TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS files (
@@ -98,6 +100,12 @@ def _ensure_init() -> None:
         try:
             conn.execute("ALTER TABLE files ADD COLUMN doc_type_confirmed INTEGER NOT NULL DEFAULT 0")
             logger.info("[Dedup] 已为旧库补加 doc_type_confirmed 列")
+        except Exception:
+            pass  # 列已存在，忽略
+        # 兼容旧库：如果 companies.credit_code 列不存在则补加
+        try:
+            conn.execute("ALTER TABLE companies ADD COLUMN credit_code TEXT")
+            logger.info("[Dedup] 已为旧库补加 companies.credit_code 列")
         except Exception:
             pass  # 列已存在，忽略
     _initialized = True
@@ -146,18 +154,26 @@ class Dedup:
     # ------------------------------------------------------------------
 
     @classmethod
-    def register_company(cls, company_id: str, name: str) -> None:
+    def register_company(
+        cls,
+        company_id: str,
+        name: str,
+        credit_code: str | None = None,
+    ) -> None:
         _ensure_init()
         now = datetime.now(timezone.utc).isoformat()
+        normalized_credit_code = (credit_code or "").strip() or None
         with _conn() as conn:
             conn.execute(
                 """
-                INSERT INTO companies (id, name, created_at) VALUES (?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET name = excluded.name
+                INSERT INTO companies (id, name, credit_code, created_at) VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    credit_code = COALESCE(excluded.credit_code, companies.credit_code)
                 """,
-                (company_id, name, now),
+                (company_id, name, normalized_credit_code, now),
             )
-        logger.info("[Dedup] 登记企业: %s (%s)", name, company_id)
+        logger.info("[Dedup] 登记企业: %s (%s) credit_code=%s", name, company_id, normalized_credit_code or "-")
 
     @classmethod
     def get_company(cls, company_id: str) -> dict | None:

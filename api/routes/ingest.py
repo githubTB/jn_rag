@@ -62,6 +62,7 @@ async def upload_folder(
     relative_paths: list[str] = Form(...),
     company_id: str = Form(...),
     company_name: str = Form(...),
+    company_credit_code: str | None = Form(None),
 ):
     """
     上传整个文件夹，保持目录结构，只保存不入库。
@@ -70,7 +71,7 @@ async def upload_folder(
     if len(files) != len(relative_paths):
         raise HTTPException(status_code=400, detail="files 和 relative_paths 数量不一致")
 
-    Dedup.register_company(company_id, company_name)
+    Dedup.register_company(company_id, company_name, company_credit_code)
     logger.info("[Upload] 企业: %s (%s)  文件数: %d", company_name, company_id, len(files))
 
     base_dir = Path(settings.upload_dir) / company_id
@@ -103,6 +104,7 @@ async def upload_folder(
         "status":        "uploaded",
         "company_id":    company_id,
         "company_name":  company_name,
+        "company_credit_code": (company_credit_code or "").strip() or None,
         "saved":         len(saved),
         "skipped":       len(skipped_list),
         "files":         saved,
@@ -615,13 +617,14 @@ async def reclassify_file(file_id: str):
 class CompanyCreate(BaseModel):
     company_id: str
     name: str
+    credit_code: str | None = None
 
 
 @router.post("/companies", status_code=201)
 async def create_company(body: CompanyCreate):
-    Dedup.register_company(body.company_id, body.name)
+    Dedup.register_company(body.company_id, body.name, body.credit_code)
     return JSONResponse({"status": "ok", "company_id": body.company_id,
-                         "name": body.name}, status_code=201)
+                         "name": body.name, "credit_code": body.credit_code}, status_code=201)
 
 
 @router.get("/companies")
@@ -633,6 +636,7 @@ async def list_companies():
         result.append({
             "company_id":      c["id"],
             "name":            c["name"],
+            "credit_code":     c.get("credit_code"),
             "created_at":      c["created_at"],
             "file_count":      len(files),
             "done_count":      sum(1 for f in files if f["status"] == "done"),
@@ -650,6 +654,7 @@ async def get_company(company_id: str):
     return JSONResponse({
         "company_id": company["id"],
         "name":       company["name"],
+        "credit_code": company.get("credit_code"),
         "created_at": company["created_at"],
         "files": [{
             "file_id":            f["id"],
