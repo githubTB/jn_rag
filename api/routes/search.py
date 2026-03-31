@@ -233,6 +233,24 @@ def _is_table_parent_chunk(hit: dict) -> bool:
     )
 
 
+def _is_table_aggregate_chunk(hit: dict) -> bool:
+    raw = str(hit.get("raw_content") or "")
+    return (
+        str(hit.get("label") or "") == "table"
+        and raw.startswith("工作表：")
+        and ("粒度：sheet" in raw or "粒度：window" in raw)
+    )
+
+
+def _is_table_row_chunk(hit: dict) -> bool:
+    raw = str(hit.get("raw_content") or "")
+    return (
+        str(hit.get("label") or "") == "table"
+        and '"工作表":"' in raw
+        and '"行号":"' in raw
+    )
+
+
 def _expand_parent_hits(query: str, hits: list[dict]) -> list[dict]:
     if not hits:
         return hits
@@ -278,6 +296,85 @@ def _expand_parent_hits(query: str, hits: list[dict]) -> list[dict]:
     if parent_hits:
         logger.info("[Query] Parent-child 补充父块 %d 条", len(parent_hits))
     return hits + parent_hits
+
+
+def _prefer_table_aggregate_hits(query: str, hits: list[dict]) -> list[dict]:
+    if not hits:
+        return hits
+
+    replacement_by_group: dict[tuple[str, str], list[dict]] = {}
+    for hit in hits:
+        if not _is_table_row_chunk(hit):
+            continue
+        file_id = str(hit.get("file_id") or "")
+        source = str(hit.get("source") or "")
+        if not file_id or not source:
+            continue
+        replacement_by_group.setdefault((file_id, source), [])
+
+    if not replacement_by_group:
+        return hits
+
+    replaced_groups = 0
+    for file_id, source in replacement_by_group:
+        try:
+            related = Embedder.query_chunks_by_file(
+                file_id=file_id,
+                source=source,
+                label="table",
+                limit=64,
+            )
+        except Exception as exc:
+            logger.warning("[Query] 查询表格聚合块失败: file_id=%s err=%s", file_id[:12], exc)
+            continue
+
+        aggregate_candidates = [item for item in related if _is_table_aggregate_chunk(item)]
+        if not aggregate_candidates:
+            continue
+
+        reranked = Reranker.rerank(
+            query=query,
+            hits=aggregate_candidates,
+            top_n=min(_PARENT_MAX_PER_FILE, len(aggregate_candidates)),
+        )
+        for item in reranked:
+            item["table_context_preferred"] = True
+        replacement_by_group[(file_id, source)] = reranked
+        replaced_groups += 1
+
+    if not replaced_groups:
+        return hits
+
+    merged_hits: list[dict] = []
+    inserted_groups: set[tuple[str, str]] = set()
+    seen_ids: set[str] = set()
+    for hit in hits:
+        file_id = str(hit.get("file_id") or "")
+        source = str(hit.get("source") or "")
+        group_key = (file_id, source)
+
+        if _is_table_row_chunk(hit) and group_key in replacement_by_group:
+            if group_key in inserted_groups:
+                continue
+            inserted_groups.add(group_key)
+            for replacement in replacement_by_group[group_key]:
+                replacement_id = str(replacement.get("id") or "")
+                if replacement_id and replacement_id in seen_ids:
+                    continue
+                if replacement_id:
+                    seen_ids.add(replacement_id)
+                merged_hits.append(replacement)
+            continue
+
+        hit_id = str(hit.get("id") or "")
+        if hit_id and hit_id in seen_ids:
+            continue
+        if hit_id:
+            seen_ids.add(hit_id)
+        merged_hits.append(hit)
+
+    logger.info("[Query] 表格聚合替换已生效: %d 个文件优先返回 sheet/window", replaced_groups)
+    return merged_hits
 
 
 def _log_matched_sources(hits: list[dict]) -> None:
@@ -376,6 +473,7 @@ def _retrieve_hits(
     rerank_top_n = len(hits) if prefer_source else top_k
     hits = Reranker.rerank(query=q, hits=hits, top_n=rerank_top_n)
     hits = _expand_parent_hits(q, hits)
+    hits = _prefer_table_aggregate_hits(q, hits)
     if prefer_source:
         keyword = prefer_source.strip().lower()
         if keyword:
