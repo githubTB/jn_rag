@@ -2,7 +2,7 @@
 企业经营规模结构化抽取配置。
 """
 
-SERVICE_NAME = "buiness_scale_extract_prompt_template"
+SERVICE_NAME = "business_scale_extract_prompt_template"
 
 # 检索问题/抽取主题默认值
 q = "提取{company_name}的经营规模情况"
