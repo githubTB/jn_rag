@@ -154,17 +154,18 @@ nav{display:flex;gap:2px}
 .fail{color:var(--danger);font-weight:600}
 
 /* 文件夹上传 */
-.folder-dz{border:2px dashed var(--accent);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--accent-bg)}
+.folder-dz{width:100%;max-width:100%;min-width:0;overflow:hidden;border:2px dashed var(--accent);border-radius:10px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--accent-bg)}
 .folder-dz:hover{background:rgba(92,107,192,0.12)}
 .folder-dz input{display:none}
-.upload-file-list{max-height:200px;overflow-y:auto;margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:8px}
-.upload-file-item{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:0.77rem;color:var(--ink-soft);border-radius:4px}
+#folder-summary{width:100%;max-width:100%;min-width:0;overflow:hidden}
+.upload-file-list{width:100%;max-width:100%;min-width:0;overflow-x:hidden;max-height:200px;overflow-y:auto;margin-top:10px;border:1px solid var(--border);border-radius:8px;padding:8px}
+.upload-file-item{display:flex;justify-content:space-between;align-items:center;gap:8px;min-width:0;padding:4px 8px;font-size:0.77rem;color:var(--ink-soft);border-radius:4px}
 .upload-file-item:hover{background:var(--paper)}
-.upload-file-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:360px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--ink-muted)}
+.upload-file-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:none;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--ink-muted)}
 .step-badge{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:0.72rem;font-weight:700;flex-shrink:0}
 .step-badge.done{background:var(--success)}
 .step-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px}
-.step-content{flex:1}
+.step-content{flex:1;min-width:0}
 </style>
 </head>
 <body>
