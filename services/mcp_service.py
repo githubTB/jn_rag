@@ -242,7 +242,12 @@ from services.prompt_templates.raw_material_composition_extract_prompt_template 
     system_prompt as RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SYSTEM_PROMPT,
     user_prompt as RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_USER_PROMPT,
 )
-
+from services.prompt_templates.wastewater_pollutants_extract_prompt_template import (
+    SERVICE_NAME as WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_SERVICE,
+    q as WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_Q,
+    system_prompt as WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_SYSTEM_PROMPT,
+    user_prompt as WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_USER_PROMPT,
+)
 
 
 @dataclass(frozen=True)
@@ -487,6 +492,12 @@ _SERVICES: dict[str, MCPService] = {
         q=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_Q,
         system_prompt=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SYSTEM_PROMPT,
         user_prompt=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_USER_PROMPT,
+    ),
+    WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_SERVICE: MCPService(
+        name=WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_SERVICE,
+        q=WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_Q,
+        system_prompt=WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_SYSTEM_PROMPT,
+        user_prompt=WASTEewaterATER_POLLUTANTS_EXTRACT_MCP_USER_PROMPT,
     ),
 }
 

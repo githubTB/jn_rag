@@ -146,6 +146,45 @@ _DEFAULT_EXTRACT_Q = _DEFAULT_EXTRACT_PROMPT.q
 _DEFAULT_EXTRACT_SYSTEM_PROMPT = _DEFAULT_EXTRACT_PROMPT.system_prompt
 _DEFAULT_EXTRACT_USER_TEMPLATE = _DEFAULT_EXTRACT_PROMPT.user_prompt
 
+_SERVICE_CN_NAME_BY_NAME: dict[str, str] = {
+    "base_extract_prompt_template": "企业基本信息",
+    "product_extract_prompt_template": "近三年产品产量",
+    "business_scale_extract_prompt_template": "经营规模信息",
+    "process_flow_extract_prompt_template": "生产工艺流程",
+    "major_production_equipment_extract_prompt_template": "主要生产设备信息",
+    "regulation_policy_extract_prompt_template": "相关法规政策依据清单",
+    "transformer_efficiency_benchmark_extract_prompt_template": "变压器设备能效对标",
+    "air_compressor_efficiency_benchmark_extract_prompt_template": "空压机设备能效对标",
+    "chiller_efficiency_benchmark_extract_prompt_template": "冷水机组设备能效对标",
+    "motor_efficiency_benchmark_extract_prompt_template": "电动机设备能效对标",
+    "pump_efficiency_benchmark_extract_prompt_template": "水泵设备能效对标",
+    "fan_efficiency_benchmark_extract_prompt_template": "风机设备能效对标",
+    "boiler_efficiency_benchmark_extract_prompt_template": "锅炉或蒸汽发生器设备能效对标",
+    "energy_metering_instrument_extract_prompt_template": "能源计量器具信息",
+    "management_system_status_extract_prompt_template": "管理体系现状",
+    "raw_material_consumption_extract_prompt_template": "主要原辅材料消耗",
+    "green_material_usage_extract_prompt_template": "绿色物料使用",
+    "energy_extract_prompt_template": "近三年能源消耗",
+    "water_efficiency_metrics_extract_prompt_template": "水效指标信息",
+    "waste_gas_treatment_extract_prompt_template": "废气治理设施",
+    "waste_gas_emission_total_extract_prompt_template": "废气污染物排放总量情况",
+    "wastewater_pollutants_extract_prompt_template": "废水污染物",
+    "solid_waste_generation_disposal_extract_prompt_template": "近三年固体废物产生与处置",
+    "noise_monitoring_extract_prompt_template": "噪音",
+    "greenhouse_gas_emissions_extract_prompt_template": "温室气体",
+    "land_intensification_extract_prompt_template": "用地集约化信息",
+    "pollutant_emission_per_product_extract_prompt_template": "单位产品与产值主要污染物排放情况",
+    "gas_emission_per_product_extract_prompt_template": "单位产品与产值主要废气排放情况",
+    "wastewater_emission_per_product_extract_prompt_template": "单位产品与产值主要废水排放情况",
+    "raw_material_consumption_per_product_extract_prompt_template": "单位产品与产值主要原材料消耗",
+    "water_consumption_per_product_extract_prompt_template": "单位产品与产值水耗",
+    "energy_consumption_per_product_extract_prompt_template": "单位产品与产值能耗",
+    "carbon_emission_per_product_extract_prompt_template": "单位产品与产值主要碳排放情况",
+    "green_production_evaluation_extract_prompt_template": "绿色生产水平综合评价",
+    "qualification_certificate_info_extract_prompt_template": "资质证书信息",
+    "tech_upgrade_scheme_summary_extract_prompt_template": "技改方案汇总与效益分析",
+}
+
 
 def _resolve_with_service_default(
     incoming: str | None,
@@ -553,6 +592,7 @@ async def query_extract(body: QueryExtractRequest):
     response: dict = {
         "query": request_q,
         "service_name": body.service_name,
+        "service_cn_name": _SERVICE_CN_NAME_BY_NAME.get(body.service_name),
         "task_id": body.task_id,
         "company_name": company_name,
         "structured_data": structured_data,
