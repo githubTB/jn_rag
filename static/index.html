@@ -302,6 +302,10 @@ nav{display:flex;gap:2px}
           <button class="btn btn-g btn-sm" onclick="loadCompanies()">🔄 刷新</button>
         </div>
       </div>
+      <div style="margin-bottom:12px">
+        <input class="fi" id="company-search" placeholder="搜索企业名称或 task_id" oninput="onCompanySearch(this.value)"/>
+        <div style="font-size:.72rem;color:var(--ink-muted);margin-top:6px">默认展示 3 个企业，输入关键字可筛选更多</div>
+      </div>
       <div class="company-grid" id="company-grid">
         <div class="empty"><div class="big">🏢</div>暂无企业</div>
       </div>
@@ -510,6 +514,21 @@ async function loadOverview() {
 
 // ── 企业列表 ──────────────────────────────────────────────────────────────
 let selectedCid = null;
+let companySearchTerm = '';
+
+function onCompanySearch(value) {
+  companySearchTerm = (value || '').trim().toLowerCase();
+  renderCompaniesGrid();
+}
+
+function getVisibleCompanies() {
+  if (!companySearchTerm) return companies.slice(0, 3);
+  return companies.filter(c => {
+    const taskId = companyTaskId(c).toLowerCase();
+    const name = companyDisplayName(c).toLowerCase();
+    return taskId.includes(companySearchTerm) || name.includes(companySearchTerm);
+  });
+}
 
 async function loadCompaniesData() {
   try {
@@ -518,15 +537,14 @@ async function loadCompaniesData() {
   } catch {}
 }
 
-async function loadCompanies() {
-  await loadCompaniesData();
-  refreshSelects();
+function renderCompaniesGrid() {
   const grid = document.getElementById('company-grid');
-  if (!companies.length) {
+  const visibleCompanies = getVisibleCompanies();
+  if (!visibleCompanies.length) {
     grid.innerHTML = '<div class="empty"><div class="big">🏢</div>暂无企业</div>';
     return;
   }
-  grid.innerHTML = companies.map(c => `
+  grid.innerHTML = visibleCompanies.map(c => `
     <div class="cc ${selectedCid===companyTaskId(c)?'sel':''}" onclick="selectCompany('${companyTaskId(c)}')">
       <div class="cc-name">${companyDisplayName(c)}</div>
       <div class="cc-id">${companyTaskId(c)}</div>
@@ -537,6 +555,12 @@ async function loadCompanies() {
         <div><div class="cc-stat-v">${c.confirmed_count||0}</div><div class="cc-stat-l">已确认</div></div>
       </div>
     </div>`).join('');
+}
+
+async function loadCompanies() {
+  await loadCompaniesData();
+  refreshSelects();
+  renderCompaniesGrid();
 }
 
 async function selectCompany(cid) {

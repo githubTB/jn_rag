@@ -5,7 +5,7 @@
 SERVICE_NAME = "product_extract_prompt_template"
 
 # 检索问题/抽取主题默认值（RAG搜索词）
-q = "提取{company_name}近三年的产品生产情况"
+q = "提取近三年的产品生产情况"
 
 # system 提示词
 system_prompt = """

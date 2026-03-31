@@ -236,6 +236,13 @@ from services.prompt_templates.tech_upgrade_scheme_summary_extract_prompt_templa
     system_prompt as TECH_UPGRADE_SCHEME_SUMMARY_EXTRACT_MCP_SYSTEM_PROMPT,
     user_prompt as TECH_UPGRADE_SCHEME_SUMMARY_EXTRACT_MCP_USER_PROMPT,
 )
+from services.prompt_templates.raw_material_composition_extract_prompt_template import (
+    SERVICE_NAME as RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SERVICE,
+    q as RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_Q,
+    system_prompt as RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SYSTEM_PROMPT,
+    user_prompt as RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_USER_PROMPT,
+)
+
 
 
 @dataclass(frozen=True)
@@ -474,6 +481,12 @@ _SERVICES: dict[str, MCPService] = {
         q=TECH_UPGRADE_SCHEME_SUMMARY_EXTRACT_MCP_Q,
         system_prompt=TECH_UPGRADE_SCHEME_SUMMARY_EXTRACT_MCP_SYSTEM_PROMPT,
         user_prompt=TECH_UPGRADE_SCHEME_SUMMARY_EXTRACT_MCP_USER_PROMPT,
+    ),
+    RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SERVICE: MCPService(
+        name=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SERVICE,
+        q=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_Q,
+        system_prompt=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_SYSTEM_PROMPT,
+        user_prompt=RAW_MATERIAL_COMPOSITION_EXTRACT_MCP_USER_PROMPT,
     ),
 }
 
