@@ -185,6 +185,10 @@ _SERVICE_CN_NAME_BY_NAME: dict[str, str] = {
     "tech_upgrade_scheme_summary_extract_prompt_template": "技改方案汇总与效益分析",
 }
 
+_SERVICE_MIN_TOP_K: dict[str, int] = {
+    "energy_extract_prompt_template": 8,
+}
+
 
 def _resolve_with_service_default(
     incoming: str | None,
@@ -639,9 +643,11 @@ async def query_extract(body: QueryExtractRequest):
         text="{text}",
     )
 
+    effective_top_k = max(body.top_k, _SERVICE_MIN_TOP_K.get(body.service_name, body.top_k))
+
     hits, reranker_used = _retrieve_hits(
         q=request_q,
-        top_k=body.top_k,
+        top_k=effective_top_k,
         score_threshold=body.score_threshold,
         task_id=body.task_id,
         doc_type=body.doc_type,
