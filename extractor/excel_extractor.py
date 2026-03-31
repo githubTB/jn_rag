@@ -38,11 +38,11 @@ class ExcelExtractor(BaseExtractor):
             try:
                 for sheet_name in wb.sheetnames:
                     sheet = wb[sheet_name]
-                    header_row_idx, col_map, max_col = self._find_header(sheet)
+                    header_row_idx, data_start_row_idx, col_map, max_col = self._find_header(sheet)
                     if not col_map:
                         continue
                     row_records: list[dict[str, object]] = []
-                    for row in sheet.iter_rows(min_row=header_row_idx + 1, max_col=max_col, values_only=False):
+                    for row in sheet.iter_rows(min_row=data_start_row_idx, max_col=max_col, values_only=False):
                         if all(cell.value is None for cell in row):
                             continue
                         row_values: dict[int, str] = {}
@@ -130,19 +130,16 @@ class ExcelExtractor(BaseExtractor):
             return "xls"
         return None
 
-    def _find_header(self, sheet, scan_rows: int = 10) -> tuple[int, dict[int, str], int]:
+    def _find_header(self, sheet, scan_rows: int = 10) -> tuple[int, int, dict[int, str], int]:
         candidates: list[_Candidate] = []
         for row_idx, row in enumerate(sheet.iter_rows(min_row=1, max_row=scan_rows, values_only=True), start=1):
-            row_map: dict[int, str] = {}
-            for col_idx, val in enumerate(row):
-                if val is not None and str(val).strip():
-                    row_map[col_idx] = str(val).strip().replace('"', '\\"')
+            row_map = self._row_map_from_values(row)
             if not row_map:
                 continue
             candidates.append({"idx": row_idx, "count": len(row_map), "map": row_map})
 
         if not candidates:
-            return 0, {}, 0
+            return 0, 0, {}, 0
 
         best: _Candidate | None = None
         for c in candidates:
@@ -153,8 +150,78 @@ class ExcelExtractor(BaseExtractor):
             candidates.sort(key=lambda x: (-x["count"], x["idx"]))
             best = candidates[0]
 
-        max_col = max(best["map"].keys()) + 1
-        return best["idx"], best["map"], max_col
+        header_rows = [best["map"]]
+        next_row_idx = best["idx"] + 1
+        if next_row_idx <= sheet.max_row:
+            next_values = next(sheet.iter_rows(
+                min_row=next_row_idx,
+                max_row=next_row_idx,
+                values_only=True,
+            ))
+            next_map = self._row_map_from_values(next_values)
+            if self._looks_like_sub_header_row(next_map):
+                header_rows.append(next_map)
+
+        max_col = max(max(row_map.keys()) for row_map in header_rows) + 1
+        col_map = self._merge_header_rows(header_rows, max_col)
+        data_start_row_idx = best["idx"] + len(header_rows)
+        return best["idx"], data_start_row_idx, col_map, max_col
+
+    @staticmethod
+    def _row_map_from_values(row) -> dict[int, str]:
+        row_map: dict[int, str] = {}
+        for col_idx, val in enumerate(row):
+            if val is None:
+                continue
+            text = str(val).strip()
+            if text:
+                row_map[col_idx] = text.replace('"', '\\"')
+        return row_map
+
+    @staticmethod
+    def _looks_like_sub_header_row(row_map: dict[int, str]) -> bool:
+        if not row_map:
+            return False
+        text_like = 0
+        for value in row_map.values():
+            compact = value.strip()
+            if re.search(r"[A-Za-z\u4e00-\u9fff%/（）()_-]", compact):
+                text_like += 1
+        return text_like >= max(1, len(row_map) // 2)
+
+    @staticmethod
+    def _fill_forward_header(row_map: dict[int, str], max_col: int) -> list[str]:
+        result: list[str] = []
+        current = ""
+        for col_idx in range(max_col):
+            value = row_map.get(col_idx, "").strip()
+            if value:
+                current = value
+            result.append(current)
+        return result
+
+    def _merge_header_rows(self, header_rows: list[dict[int, str]], max_col: int) -> dict[int, str]:
+        expanded_rows = [self._fill_forward_header(row_map, max_col) for row_map in header_rows]
+        merged: dict[int, str] = {}
+        used_names: dict[str, int] = {}
+        for col_idx in range(max_col):
+            tokens: list[str] = []
+            for row in expanded_rows:
+                token = row[col_idx].strip()
+                if not token:
+                    continue
+                if tokens and token == tokens[-1]:
+                    continue
+                tokens.append(token)
+            if not tokens:
+                continue
+            name = " - ".join(tokens)
+            count = used_names.get(name, 0) + 1
+            used_names[name] = count
+            if count > 1:
+                name = f"{name}({count})"
+            merged[col_idx] = name
+        return merged
 
     def _is_repeated_header_row(self, row_values: dict[int, str], col_map: dict[int, str]) -> bool:
         """
