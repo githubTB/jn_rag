@@ -5,7 +5,7 @@
 SERVICE_NAME = "energy_extract_prompt_template"
 
 # 检索问题/抽取主题默认值
-q = "提取{company_name}企业能源能源消耗情况、能源利用情况、能源节约情况"
+q = "提取{company_name}企业能源能源消耗情况。列如：水、电、气、热、油、煤、天然气、石油等"
 
 # system 提示词
 system_prompt = "你是一个数据提取分析师，基于提供的文本，提取出其中能源消耗近三年的数值信息和关联数值信息。"
