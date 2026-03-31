@@ -105,11 +105,39 @@ nav{display:flex;gap:2px}
 .sbar{display:flex;gap:10px}
 .sbar input{flex:1;border:1.5px solid var(--border);border-radius:10px;padding:10px 14px;font-size:0.92rem;outline:none;transition:border-color .2s;background:var(--surface);font-family:inherit}
 .sbar input:focus{border-color:var(--accent)}
-.sopts{display:flex;align-items:center;gap:10px;font-size:0.78rem;color:var(--ink-muted);margin-top:8px;flex-wrap:wrap}
+#query-panel{display:flex;flex-direction:column;gap:12px}
+.query-mode-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.query-mode-tabs{display:inline-flex;gap:6px;padding:4px;border:1px solid var(--border);border-radius:10px;background:var(--paper)}
+.query-mode-tab{padding:6px 12px;border:none;border-radius:8px;background:transparent;color:var(--ink-muted);font-size:0.78rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.query-mode-tab.active{background:var(--accent);color:#fff;box-shadow:0 4px 10px rgba(92,107,192,.18)}
+.query-chat .debug-only{display:none}
+.query-input-wrap{order:1}
+.sopts{order:2;display:flex;align-items:center;gap:10px;font-size:0.78rem;color:var(--ink-muted);flex-wrap:wrap;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(180deg,#fafaff 0%, #f7f6f3 100%)}
 .sopts select{border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:0.78rem;background:var(--paper);color:var(--ink);outline:none;font-family:inherit}
+.sopts label{font-weight:600;color:var(--ink-soft)}
+.query-chat .sopts{order:1}
+.chat-thread{order:2}
+.query-chat .chat-thread{order:2}
+.query-chat .query-input-wrap{order:3}
 .ah{display:flex;align-items:center;gap:8px;padding:11px 18px;border-bottom:1px solid var(--border)}
 .mbadge{font-family:'JetBrains Mono',monospace;font-size:0.69rem;padding:2px 7px;background:var(--accent-bg);color:var(--accent);border-radius:4px;border:1px solid rgba(92,107,192,.18)}
 #answer-body{padding:18px;font-size:0.9rem;line-height:1.8;white-space:pre-wrap}
+.chat-thread{display:none;flex-direction:column;gap:14px;min-height:320px;max-height:68vh;overflow-y:auto;padding:18px;background:linear-gradient(180deg,#fcfcfe 0%, #f8f7f4 100%);border:1px solid var(--border);border-radius:14px}
+.query-chat .chat-thread{display:flex}
+.chat-empty{margin:auto;text-align:center;color:var(--ink-muted);padding:28px 20px}
+.chat-msg{display:flex;gap:10px;align-items:flex-start}
+.chat-msg.user{justify-content:flex-end}
+.chat-avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;font-size:0.88rem}
+.chat-msg.assistant .chat-avatar{background:var(--accent-bg);color:var(--accent)}
+.chat-msg.user .chat-avatar{background:#ecfdf5;color:#0f766e;order:2}
+.chat-bubble{max-width:min(860px,80%);padding:12px 14px;border-radius:14px;border:1px solid var(--border);box-shadow:var(--shadow);font-size:0.88rem;line-height:1.8;white-space:pre-wrap;word-break:break-word;background:var(--surface)}
+.chat-msg.user .chat-bubble{background:linear-gradient(180deg,#f4f7ff 0%, #eef2ff 100%);border-color:rgba(92,107,192,.18)}
+.chat-msg.assistant .chat-bubble{background:var(--surface)}
+.chat-meta{margin-top:8px;font-size:0.72rem;color:var(--ink-muted);display:flex;flex-wrap:wrap;gap:8px}
+.chat-sources{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);display:flex;flex-wrap:wrap;gap:6px}
+.chat-source{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:var(--paper);font-size:0.72rem;color:var(--ink-soft);text-decoration:none;border:1px solid var(--border)}
+.chat-source:hover{color:var(--accent);border-color:var(--accent)}
+.chat-loading{display:inline-flex;align-items:center;gap:8px;color:var(--ink-muted)}
 .ri{border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:9px;background:var(--surface)}
 .ri:hover{box-shadow:var(--shadow);border-color:rgba(92,107,192,.28)}
 .ri-top{display:flex;align-items:flex-start;gap:9px;margin-bottom:7px}
@@ -347,10 +375,12 @@ nav{display:flex;gap:2px}
 <div class="view" id="view-query">
   <div class="card" style="margin-bottom:14px">
     <div class="ch"><span class="ic">💬</span>智能问答</div>
-    <div class="cb">
-      <div class="sbar">
-        <input type="text" id="qi" placeholder="输入问题，按 Enter 搜索…"/>
-        <button class="btn btn-p" id="qbtn">🔍 搜索</button>
+    <div class="cb" id="query-panel">
+      <div class="query-mode-bar">
+        <div class="query-mode-tabs">
+          <button class="query-mode-tab active" id="query-mode-chat" onclick="setQueryMode('chat')">聊天模式</button>
+          <button class="query-mode-tab" id="query-mode-debug" onclick="setQueryMode('debug')">调试模式</button>
+        </div>
       </div>
       <div class="sopts">
         <label>Chunk数：</label>
@@ -371,9 +401,18 @@ nav{display:flex;gap:2px}
           <option value="document">文档</option>
         </select>
       </div>
+      <div class="chat-thread" id="chat-thread">
+        <div class="chat-empty">输入问题开始对话</div>
+      </div>
+      <div class="query-input-wrap">
+      <div class="sbar">
+        <input type="text" id="qi" placeholder="输入问题，按 Enter 搜索…"/>
+        <button class="btn btn-p" id="qbtn">🔍 搜索</button>
+      </div>
+      </div>
     </div>
   </div>
-  <div class="card" id="answer-card" style="display:none;margin-bottom:14px">
+  <div class="card debug-only" id="answer-card" style="display:none;margin-bottom:14px">
     <div class="ah">
       <span style="font-weight:600;font-size:.87rem">🤖 AI 回答</span>
       <span class="mbadge" id="q-model"></span>
@@ -381,7 +420,7 @@ nav{display:flex;gap:2px}
     </div>
     <div id="answer-body"></div>
   </div>
-  <div class="card">
+  <div class="card debug-only" id="results-card">
     <div class="ch"><span class="ic">📑</span>检索来源</div>
     <div class="cb">
       <div id="results"><div class="empty"><div class="big">🔎</div>输入问题开始搜索</div></div>
@@ -411,6 +450,8 @@ let folderFiles = [];       // 选中的文件列表
 let uploadedCompanyId = ''; // 上传成功后记录企业ID，用于入库
 let replaceTargetFileId = null;
 let replaceTargetFilename = null;
+let queryMode = 'chat';
+let chatMessages = [];
 
 function companyTaskId(company) {
   return company?.task_id || '';
@@ -418,6 +459,89 @@ function companyTaskId(company) {
 
 function companyDisplayName(company) {
   return company?.company_name || '';
+}
+
+function updateQueryButtonLabel(loading = false) {
+  const btn = document.getElementById('qbtn');
+  if (!btn) return;
+  if (loading) {
+    btn.innerHTML = queryMode === 'chat'
+      ? '<span class="spin">💬</span> 发送中…'
+      : '<span class="spin">🔍</span> 搜索中…';
+    return;
+  }
+  btn.innerHTML = queryMode === 'chat' ? '💬 发送' : '🔍 搜索';
+}
+
+function formatAnswerHtml(text) {
+  return (text || '')
+    .replace(/\[(\d+)\]/g,'<span style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--accent);background:var(--accent-bg);padding:1px 4px;border-radius:3px">[$1]</span>');
+}
+
+function renderChatThread() {
+  const el = document.getElementById('chat-thread');
+  if (!el) return;
+  if (!chatMessages.length) {
+    el.innerHTML = '<div class="chat-empty">输入问题开始对话</div>';
+    return;
+  }
+
+  el.innerHTML = chatMessages.map(msg => {
+    if (msg.role === 'user') {
+      return `
+        <div class="chat-msg user">
+          <div class="chat-avatar">👤</div>
+          <div class="chat-bubble">${esc(msg.text || '')}</div>
+        </div>
+      `;
+    }
+
+    const sources = (msg.sources || []).map(src => {
+      const fileId = src.file_id || '';
+      const fileName = src.file || (src.path || '').split('/').pop() || '来源文件';
+      const preview = fileId ? fileAssetUrl(fileId, 'inline') : '';
+      return preview
+        ? `<a class="chat-source" href="${preview}" target="_blank" rel="noopener noreferrer">${esc(fileName)}</a>`
+        : `<span class="chat-source">${esc(fileName)}</span>`;
+    }).join('');
+
+    const usage = msg.llm_usage || {};
+    const usageText = [
+      usage.prompt_tokens != null ? `输入 ${usage.prompt_tokens}` : '',
+      usage.completion_tokens != null ? `输出 ${usage.completion_tokens}` : '',
+      usage.duration_ms != null ? `耗时 ${usage.duration_ms}ms` : '',
+    ].filter(Boolean).join(' · ');
+
+    return `
+      <div class="chat-msg assistant">
+        <div class="chat-avatar">🤖</div>
+        <div class="chat-bubble">
+          ${msg.loading ? '<div class="chat-loading"><span class="spin">⚙️</span>正在思考…</div>' : formatAnswerHtml(msg.text || '')}
+          ${!msg.loading && usageText ? `<div class="chat-meta">${esc(usageText)}</div>` : ''}
+          ${!msg.loading && sources ? `<div class="chat-sources">${sources}</div>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function setQueryMode(mode) {
+  queryMode = mode === 'debug' ? 'debug' : 'chat';
+  const panel = document.getElementById('query-panel');
+  const chatBtn = document.getElementById('query-mode-chat');
+  const debugBtn = document.getElementById('query-mode-debug');
+  const answerCard = document.getElementById('answer-card');
+  const resultsCard = document.getElementById('results-card');
+  if (!panel || !chatBtn || !debugBtn) return;
+
+  panel.classList.toggle('query-chat', queryMode === 'chat');
+  chatBtn.classList.toggle('active', queryMode === 'chat');
+  debugBtn.classList.toggle('active', queryMode === 'debug');
+  if (answerCard) answerCard.style.display = queryMode === 'debug' && answerCard.dataset.hasAnswer === 'true' ? 'block' : 'none';
+  if (resultsCard) resultsCard.style.display = queryMode === 'debug' ? 'block' : 'none';
+  updateQueryButtonLabel();
+  renderChatThread();
 }
 
 // ── 视图切换 ──────────────────────────────────────────────────────────────
@@ -989,9 +1113,20 @@ async function doSearch() {
   const preferSource = document.getElementById('q-prefer-source').value;
   const dt   = document.getElementById('q-type').value;
   const btn  = document.getElementById('qbtn');
-  btn.disabled=true; btn.innerHTML='<span class="spin">🔍</span> 搜索中…';
+  btn.disabled=true;
+  updateQueryButtonLabel(true);
+  const answerCard = document.getElementById('answer-card');
+  const resultsCard = document.getElementById('results-card');
   document.getElementById('results').innerHTML='<div class="empty"><div class="spin" style="font-size:1.4rem">⚙️</div></div>';
-  document.getElementById('answer-card').style.display='none';
+  if (answerCard) {
+    answerCard.style.display='none';
+    answerCard.dataset.hasAnswer = 'false';
+  }
+  if (queryMode === 'chat') {
+    chatMessages.push({role:'user', text:q});
+    chatMessages.push({role:'assistant', loading:true, text:''});
+    renderChatThread();
+  }
   try {
     let url = `/api/query?q=${encodeURIComponent(q)}&top_k=${topk}`;
     if (cid) url+=`&task_id=${encodeURIComponent(cid)}`;
@@ -1001,11 +1136,24 @@ async function doSearch() {
     if (!r.ok) { const e=await r.json(); throw new Error(e.detail||`HTTP ${r.status}`); }
     const data = await r.json();
 
-    document.getElementById('answer-card').style.display='block';
+    if (queryMode === 'chat') {
+      chatMessages = chatMessages.filter((msg, idx) => !(idx === chatMessages.length - 1 && msg.role === 'assistant' && msg.loading));
+      chatMessages.push({
+        role:'assistant',
+        text:data.answer || '未找到相关内容',
+        sources:(data.sources || []).map(src => ({...src, file_id: (data.chunks || []).find(h => h.source === src.path)?.file_id || ''})),
+        llm_usage:data.llm_usage || {},
+      });
+      renderChatThread();
+    }
+
+    if (answerCard) {
+      answerCard.dataset.hasAnswer = 'true';
+      answerCard.style.display = queryMode === 'debug' ? 'block' : 'none';
+    }
     document.getElementById('q-model').textContent = healthData.llm_model||'Qwen';
     document.getElementById('q-reranker').textContent = data.reranker ? '✓ Reranker 精排' : '';
-    document.getElementById('answer-body').innerHTML = (data.answer||'')
-      .replace(/\[(\d+)\]/g,'<span style="font-family:JetBrains Mono,monospace;font-size:.72rem;color:var(--accent);background:var(--accent-bg);padding:1px 4px;border-radius:3px">[$1]</span>');
+    document.getElementById('answer-body').innerHTML = formatAnswerHtml(data.answer||'');
 
     const hits = data.chunks||[];
     if (!hits.length) {
@@ -1029,8 +1177,20 @@ async function doSearch() {
         </div>`).join('');
     }
   } catch(e) {
+    if (queryMode === 'chat') {
+      chatMessages = chatMessages.filter((msg, idx) => !(idx === chatMessages.length - 1 && msg.role === 'assistant' && msg.loading));
+      chatMessages.push({role:'assistant', text:`搜索出错：${e.message}`, sources:[], llm_usage:{}});
+      renderChatThread();
+    }
     document.getElementById('results').innerHTML=`<div class="empty" style="color:var(--danger)">搜索出错：${e.message}</div>`;
-  } finally { btn.disabled=false; btn.innerHTML='🔍 搜索'; }
+  } finally {
+    if (queryMode === 'debug') {
+      if (resultsCard) resultsCard.style.display = 'block';
+      if (answerCard) answerCard.style.display = answerCard.dataset.hasAnswer === 'true' ? 'block' : 'none';
+    }
+    btn.disabled=false;
+    updateQueryButtonLabel(false);
+  }
 }
 
 function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
@@ -1093,6 +1253,8 @@ document.getElementById('q-company').addEventListener('change', refreshPreferSou
   await loadCompaniesData();
   loadOverview();
   refreshSelects();
+  setQueryMode('chat');
+  updateQueryButtonLabel(false);
 })();
 </script>
 </body>
